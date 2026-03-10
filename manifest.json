@@ -1,0 +1,12 @@
+{
+  "name": "暑期班課程卡生成器",
+  "id": "summer-class-card-generator",
+  "api": "1.0.0",
+  "main": "code.js",
+  "ui": "ui.html",
+  "editorType": ["figma"],
+  "networkAccess": {
+    "allowedDomains": ["https://api.notion.com"],
+    "devAllowedDomains": ["https://api.notion.com"]
+  }
+}

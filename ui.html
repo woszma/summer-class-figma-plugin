@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<style>
+/* ── Reset & Base ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, "Inter", "Noto Sans TC", sans-serif;
+  font-size: 12px; color: #1a1a1a; background: #fff;
+  padding: 16px; overflow-x: hidden;
+}
+/* ── Typography ────────────────────────────────────────── */
+h2 { font-size: 14px; font-weight: 700; margin-bottom: 12px; color: #111; }
+label { display: block; font-size: 11px; font-weight: 600; color: #555; margin-bottom: 4px; }
+/* ── Inputs ─────────────────────────────────────────────── */
+input[type=text], input[type=password], select {
+  width: 100%; padding: 7px 10px; border: 1px solid #ddd; border-radius: 6px;
+  font-size: 12px; color: #1a1a1a; background: #fafafa; outline: none;
+  transition: border-color .15s;
+}
+input:focus, select:focus { border-color: #7b61ff; background: #fff; }
+.field { margin-bottom: 12px; }
+/* ── Buttons ─────────────────────────────────────────────── */
+button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 14px; border: none; border-radius: 6px; cursor: pointer;
+  font-size: 12px; font-weight: 600; transition: opacity .15s, background .15s;
+}
+button:disabled { opacity: .45; cursor: not-allowed; }
+.btn-primary   { background: #7b61ff; color: #fff; width: 100%; padding: 9px; }
+.btn-secondary { background: #f0f0f0; color: #333; }
+.btn-outline   { background: transparent; color: #7b61ff; border: 1px solid #7b61ff; }
+.btn-sm        { padding: 5px 10px; font-size: 11px; }
+.btn-danger    { background: #fee; color: #c00; }
+/* ── Steps indicator ────────────────────────────────────── */
+.steps {
+  display: flex; gap: 0; margin-bottom: 18px; border-radius: 8px;
+  overflow: hidden; border: 1px solid #eee;
+}
+.step-tab {
+  flex: 1; text-align: center; padding: 7px 4px; font-size: 10px;
+  font-weight: 600; color: #aaa; background: #fafafa; cursor: pointer;
+  border-right: 1px solid #eee; transition: all .15s;
+}
+.step-tab:last-child { border-right: none; }
+.step-tab.active { background: #7b61ff; color: #fff; }
+.step-tab.done   { background: #e8f5e9; color: #388e3c; }
+/* ── Step panels ─────────────────────────────────────────── */
+.panel { display: none; }
+.panel.active { display: block; }
+/* ── Cards ───────────────────────────────────────────────── */
+.card {
+  background: #f8f7ff; border: 1px solid #ede9ff; border-radius: 8px;
+  padding: 12px; margin-bottom: 10px;
+}
+.card-title { font-size: 11px; font-weight: 700; color: #7b61ff; margin-bottom: 8px; }
+/* ── Comp scan box ───────────────────────────────────────── */
+.comp-box {
+  border: 1.5px dashed #ccc; border-radius: 8px; padding: 12px;
+  text-align: center; margin-bottom: 10px;
+}
+.comp-box.scanned { border-color: #7b61ff; background: #f8f7ff; text-align: left; }
+.comp-name { font-weight: 700; color: #7b61ff; margin-bottom: 4px; }
+.layer-list {
+  max-height: 80px; overflow-y: auto; font-size: 10px;
+  color: #666; line-height: 1.6;
+}
+.tag-ok { display: inline-block; background: #e8f5e9; color: #388e3c; border-radius: 4px; padding: 1px 5px; font-size: 10px; }
+.tag-warn { background: #fff3e0; color: #e65100; border-radius: 4px; padding: 1px 5px; font-size: 10px; }
+/* ── Data preview ────────────────────────────────────────── */
+#preview-list { max-height: 240px; overflow-y: auto; }
+.course-row {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 10px; border-bottom: 1px solid #f0f0f0; font-size: 11px;
+}
+.course-row:last-child { border-bottom: none; }
+.course-row .title { font-weight: 600; flex: 1; }
+.course-row .meta  { color: #888; font-size: 10px; white-space: nowrap; }
+/* ── Progress ────────────────────────────────────────────── */
+.progress-wrap { margin: 12px 0; }
+.progress-bar-bg {
+  background: #eee; border-radius: 99px; height: 6px; overflow: hidden;
+}
+.progress-bar-fill {
+  height: 100%; background: #7b61ff; border-radius: 99px;
+  transition: width .3s ease; width: 0%;
+}
+.progress-label { font-size: 11px; color: #555; margin-top: 5px; }
+/* ── Log ─────────────────────────────────────────────────── */
+#sync-log {
+  background: #1e1e1e; color: #a8ff78; border-radius: 6px; padding: 10px;
+  font-family: monospace; font-size: 10.5px; line-height: 1.7;
+  max-height: 140px; overflow-y: auto; margin-top: 10px;
+  display: none;
+}
+.log-ok   { color: #a8ff78; }
+.log-info { color: #79d7f7; }
+.log-warn { color: #ffe089; }
+.log-err  { color: #ff6b6b; }
+/* ── Toggle switch ───────────────────────────────────────── */
+.toggle-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 10px; border-radius: 6px; background: #f5f5f5; margin-bottom: 8px;
+}
+.toggle-row input[type=checkbox] { width: 16px; height: 16px; accent-color: #7b61ff; }
+.toggle-label { flex: 1; }
+.toggle-title { font-weight: 600; font-size: 11.5px; }
+.toggle-desc  { color: #888; font-size: 10px; }
+/* ── Alerts ──────────────────────────────────────────────── */
+#error-bar {
+  display: none; background: #fff0f0; border: 1px solid #ffcdd2;
+  border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+  font-size: 11px; color: #c62828;
+}
+#success-bar {
+  display: none; background: #f1f8e9; border: 1px solid #c5e1a5;
+  border-radius: 6px; padding: 8px 10px; margin-bottom: 10px;
+  font-size: 11px; color: #2e7d32;
+}
+/* ── Nav ──────────────────────────────────────────────────── */
+.nav-row {
+  display: flex; gap: 8px; margin-top: 14px;
+}
+.nav-row .btn-primary { flex: 1; }
+/* ── Misc ─────────────────────────────────────────────────── */
+.divider { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+.text-muted { color: #999; font-size: 10.5px; }
+.spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid #ccc; border-top-color: #7b61ff;
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- ── Step Tabs ─────────────────────────────────────── -->
+<div class="steps">
+  <div class="step-tab active" id="tab-1">① 設定</div>
+  <div class="step-tab"        id="tab-2">② 資料</div>
+  <div class="step-tab"        id="tab-3">③ 組件</div>
+  <div class="step-tab"        id="tab-4">④ 同步</div>
+</div>
+
+<!-- ── Error / Success bars ──────────────────────────── -->
+<div id="error-bar"></div>
+<div id="success-bar"></div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- STEP 1: 設定                                        -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="panel active" id="panel-1">
+  <h2>① Notion 連接設定</h2>
+  <div class="field">
+    <label>Integration Token <span class="text-muted">（以 secret_ 開頭）</span></label>
+    <input type="password" id="token" placeholder="secret_xxxxxxxxxxxx" />
+  </div>
+  <div class="field">
+    <label>課程資料庫 ID <span class="text-muted">（32位英數字）</span></label>
+    <input type="text" id="courses-db" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+  </div>
+  <div class="field">
+    <label>班別資料庫 ID</label>
+    <input type="text" id="classes-db" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
+  </div>
+
+  <!-- 進階：欄位名稱對應 -->
+  <details style="margin-top:4px; margin-bottom:12px;">
+    <summary style="cursor:pointer; font-size:11px; color:#7b61ff; font-weight:600;">
+      ▸ 進階：自訂 Notion 欄位名稱
+    </summary>
+    <div style="margin-top:10px; padding:10px; background:#f8f7ff; border-radius:8px;">
+      <p class="text-muted" style="margin-bottom:8px;">若你的 Notion 資料庫欄位名稱與預設不同，請在此修改。</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <div>
+          <p style="font-size:10px; font-weight:700; color:#7b61ff; margin-bottom:4px;">課程資料庫</p>
+          <label>課程名稱 (Title)</label>
+          <input type="text" id="f-course-title" placeholder="課程名稱" value="課程名稱" style="margin-bottom:4px;" />
+          <label>類別</label>
+          <input type="text" id="f-course-category" placeholder="類別" value="類別" style="margin-bottom:4px;" />
+          <label>導師</label>
+          <input type="text" id="f-course-instructor" placeholder="導師" value="導師" style="margin-bottom:4px;" />
+          <label>上課日期</label>
+          <input type="text" id="f-course-dates" placeholder="上課日期" value="上課日期" style="margin-bottom:4px;" />
+          <label>課程描述</label>
+          <input type="text" id="f-course-desc" placeholder="課程描述" value="課程描述" style="margin-bottom:4px;" />
+          <label>備註</label>
+          <input type="text" id="f-course-notes" placeholder="備註" value="備註" style="margin-bottom:4px;" />
+          <label>班別關聯 (Relation)</label>
+          <input type="text" id="f-course-relation" placeholder="相關班別" value="相關班別" />
+        </div>
+        <div>
+          <p style="font-size:10px; font-weight:700; color:#7b61ff; margin-bottom:4px;">班別資料庫</p>
+          <label>班別名稱 (Title)</label>
+          <input type="text" id="f-class-name" placeholder="班別名稱" value="班別名稱" style="margin-bottom:4px;" />
+          <label>編號</label>
+          <input type="text" id="f-class-code" placeholder="編號" value="編號" style="margin-bottom:4px;" />
+          <label>對象</label>
+          <input type="text" id="f-class-target" placeholder="對象" value="對象" style="margin-bottom:4px;" />
+          <label>名額</label>
+          <input type="text" id="f-class-quota" placeholder="名額" value="名額" style="margin-bottom:4px;" />
+          <label>時間</label>
+          <input type="text" id="f-class-time" placeholder="時間" value="時間" style="margin-bottom:4px;" />
+          <label>地點</label>
+          <input type="text" id="f-class-location" placeholder="地點" value="地點" style="margin-bottom:4px;" />
+          <label>費用</label>
+          <input type="text" id="f-class-fee" placeholder="費用" value="費用" style="margin-bottom:4px;" />
+          <label>材料費</label>
+          <input type="text" id="f-class-material" placeholder="材料費" value="材料費" style="margin-bottom:4px;" />
+          <label>所屬課程 (Relation)</label>
+          <input type="text" id="f-class-relation" placeholder="所屬課程" value="所屬課程" />
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <div class="nav-row">
+    <button class="btn-primary" onclick="saveConfigAndNext()">儲存並繼續 →</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- STEP 2: 資料預覽                                    -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-2">
+  <h2>② 獲取 Notion 資料</h2>
+  <button class="btn-secondary" onclick="fetchNotionData()" id="btn-fetch">
+    <span id="fetch-spinner" style="display:none" class="spinner"></span>
+    獲取課程資料
+  </button>
+  <div id="preview-wrap" style="display:none; margin-top:12px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <span id="preview-count" class="text-muted"></span>
+      <button class="btn-sm btn-outline" onclick="fetchNotionData()">重新獲取</button>
+    </div>
+    <div class="card" style="padding:0; overflow:hidden;">
+      <div id="preview-list"></div>
+    </div>
+  </div>
+  <div class="nav-row" style="margin-top:12px;">
+    <button class="btn-secondary btn-sm" onclick="goStep(1)">← 返回</button>
+    <button class="btn-primary" id="btn-to-step3" onclick="goStep(3)" disabled>
+      下一步：選擇組件 →
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- STEP 3: 選擇 Figma 組件                             -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-3">
+  <h2>③ 設定 Figma 組件</h2>
+  <p class="text-muted" style="margin-bottom:12px;">
+    請在 Figma 畫布上選取對應的組件，再點擊「讀取組件」按鈕。<br/>
+    組件內需有 <strong>#</strong> 開頭的圖層供插件填入資料。
+  </p>
+
+  <!-- 課程卡 -->
+  <div class="card">
+    <div class="card-title">課程主卡（CourseCard）</div>
+    <p class="text-muted" style="margin-bottom:8px;">
+      需含 #course-title、#course-category、#course-instructor、
+      #course-dates、#course-description、#course-notes 及
+      名為「ClassesContainer」的容器框架。
+    </p>
+    <div class="comp-box" id="course-comp-box">
+      <span class="text-muted">尚未選取</span>
+    </div>
+    <button class="btn-secondary" style="width:100%" onclick="scanComponent('course')">
+      在 Figma 選取課程卡後，點此讀取
+    </button>
+  </div>
+
+  <!-- 班別卡 -->
+  <div class="card">
+    <div class="card-title">班別子卡（ClassCard）</div>
+    <p class="text-muted" style="margin-bottom:8px;">
+      需含 #class-name、#class-id、#class-target、#class-quota、
+      #class-time、#class-location、#class-fee。
+    </p>
+    <div class="comp-box" id="class-comp-box">
+      <span class="text-muted">尚未選取</span>
+    </div>
+    <button class="btn-secondary" style="width:100%" onclick="scanComponent('class')">
+      在 Figma 選取班別卡後，點此讀取
+    </button>
+  </div>
+
+  <div class="nav-row">
+    <button class="btn-secondary btn-sm" onclick="goStep(2)">← 返回</button>
+    <button class="btn-primary" id="btn-to-step4" onclick="goStep(4)" disabled>
+      下一步：同步 →
+    </button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- STEP 4: 同步                                        -->
+<!-- ════════════════════════════════════════════════════ -->
+<div class="panel" id="panel-4">
+  <h2>④ 同步到 Figma</h2>
+
+  <!-- 方案 A -->
+  <div class="toggle-row">
+    <input type="checkbox" id="mode-a" checked />
+    <div class="toggle-label">
+      <div class="toggle-title">方案 A — 直接同步文字</div>
+      <div class="toggle-desc">在畫布上生成/更新課程卡 Instance，填入文字內容</div>
+    </div>
+  </div>
+
+  <!-- 方案 D -->
+  <div class="toggle-row">
+    <input type="checkbox" id="mode-d" />
+    <div class="toggle-label">
+      <div class="toggle-title">方案 D — 建立 Figma Variables</div>
+      <div class="toggle-desc">在「暑期班資料」集合建立變數，設計師可用變數綁定做主題切換</div>
+    </div>
+  </div>
+
+  <!-- 進度 -->
+  <div id="progress-section" style="display:none; margin: 10px 0;">
+    <div class="progress-wrap">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-fill"></div>
+      </div>
+      <div class="progress-label" id="progress-label">準備中...</div>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div id="sync-log"></div>
+
+  <div class="nav-row">
+    <button class="btn-secondary btn-sm" id="btn-back-3" onclick="goStep(3)">← 返回</button>
+    <button class="btn-primary" id="btn-sync" onclick="startSync()">開始同步</button>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════ -->
+<script>
+// ── State ───────────────────────────────────────────────
+const state = {
+  step: 1,
+  config: {},
+  courses: null,       // CourseCardData[]
+  courseCompId: null,
+  classCompId: null,
+};
+
+// ── Step Navigation ──────────────────────────────────────
+function goStep(n) {
+  state.step = n;
+  document.querySelectorAll('.panel').forEach((p, i) => {
+    p.classList.toggle('active', i + 1 === n);
+  });
+  document.querySelectorAll('.step-tab').forEach((t, i) => {
+    t.classList.remove('active', 'done');
+    if (i + 1 === n) t.classList.add('active');
+    else if (i + 1 < n) t.classList.add('done');
+  });
+  clearAlerts();
+}
+
+// ── Alert helpers ────────────────────────────────────────
+function showError(msg) {
+  const el = document.getElementById('error-bar');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+function showSuccess(msg) {
+  const el = document.getElementById('success-bar');
+  el.textContent = '✓ ' + msg;
+  el.style.display = 'block';
+}
+function clearAlerts() {
+  document.getElementById('error-bar').style.display = 'none';
+  document.getElementById('success-bar').style.display = 'none';
+}
+
+// ── Log helpers ──────────────────────────────────────────
+function log(msg, cls = 'log-info') {
+  const el = document.getElementById('sync-log');
+  el.style.display = 'block';
+  const line = document.createElement('div');
+  line.className = cls;
+  line.textContent = '› ' + msg;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+}
+
+// ── Step 1: Save config ──────────────────────────────────
+function saveConfigAndNext() {
+  const token    = document.getElementById('token').value.trim();
+  const coursesDb = document.getElementById('courses-db').value.trim().replace(/[-\s]/g,'');
+  const classesDb  = document.getElementById('classes-db').value.trim().replace(/[-\s]/g,'');
+
+  if (!token || !coursesDb || !classesDb) {
+    return showError('請填寫 Notion Token 及兩個資料庫 ID');
+  }
+  if (!token.startsWith('secret_') && !token.startsWith('ntn_')) {
+    return showError('Token 格式不正確，應以 secret_ 或 ntn_ 開頭');
+  }
+
+  state.config = {
+    token, coursesDb, classesDb,
+    fields: {
+      course: {
+        title:      document.getElementById('f-course-title').value || '課程名稱',
+        category:   document.getElementById('f-course-category').value || '類別',
+        instructor: document.getElementById('f-course-instructor').value || '導師',
+        dates:      document.getElementById('f-course-dates').value || '上課日期',
+        desc:       document.getElementById('f-course-desc').value || '課程描述',
+        notes:      document.getElementById('f-course-notes').value || '備註',
+        relation:   document.getElementById('f-course-relation').value || '相關班別',
+      },
+      cls: {
+        name:     document.getElementById('f-class-name').value || '班別名稱',
+        code:     document.getElementById('f-class-code').value || '編號',
+        target:   document.getElementById('f-class-target').value || '對象',
+        quota:    document.getElementById('f-class-quota').value || '名額',
+        time:     document.getElementById('f-class-time').value || '時間',
+        location: document.getElementById('f-class-location').value || '地點',
+        fee:      document.getElementById('f-class-fee').value || '費用',
+        material: document.getElementById('f-class-material').value || '材料費',
+        relation: document.getElementById('f-class-relation').value || '所屬課程',
+      }
+    }
+  };
+
+  parent.postMessage({ pluginMessage: { type: 'save-config', config: state.config } }, '*');
+  goStep(2);
+}
+
+// ── Step 2: Fetch Notion Data ────────────────────────────
+async function fetchNotionData() {
+  clearAlerts();
+  const btn = document.getElementById('btn-fetch');
+  const spinner = document.getElementById('fetch-spinner');
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+
+  try {
+    const { token, coursesDb, classesDb, fields } = state.config;
+    const headers = {
+      'Authorization': `Bearer ${token}`,
+      'Notion-Version': '2022-06-28',
+      'Content-Type': 'application/json'
+    };
+
+    // Fetch all courses
+    const coursesRaw = await queryAll(`https://api.notion.com/v1/databases/${coursesDb}/query`, headers);
+    // Fetch all classes
+    const classesRaw = await queryAll(`https://api.notion.com/v1/databases/${classesDb}/query`, headers);
+
+    // Group classes by course ID (via class→course relation)
+    const classesByCourse = new Map();
+    for (const cls of classesRaw) {
+      const courseIds = getProp(cls, fields.cls.relation, 'relation') || [];
+      for (const cid of courseIds) {
+        if (!classesByCourse.has(cid)) classesByCourse.set(cid, []);
+        classesByCourse.get(cid).push(cls);
+      }
+    }
+
+    // Build CourseCardData[]
+    state.courses = coursesRaw.map(course => {
+      const f = fields.course;
+      return {
+        courseId:    course.id,
+        title:       getTitle(course) || getProp(course, f.title, 'rich_text') || '',
+        category:    getProp(course, f.category, 'select') || '',
+        instructor:  getProp(course, f.instructor, 'rich_text') || '',
+        dates:       formatDates(course, f.dates),
+        description: getProp(course, f.desc, 'rich_text') || '',
+        notes:       getProp(course, f.notes, 'rich_text') || '',
+        classes: (classesByCourse.get(course.id) || []).map(cls => {
+          const cf = fields.cls;
+          return {
+            classId:     cls.id,
+            name:        getTitle(cls) || getProp(cls, cf.name, 'rich_text') || '',
+            code:        getProp(cls, cf.code, 'number') ?? getProp(cls, cf.code, 'rich_text') ?? '',
+            target:      getProp(cls, cf.target, 'rich_text') || '',
+            quota:       getProp(cls, cf.quota, 'number') ?? null,
+            time:        getProp(cls, cf.time, 'rich_text') || '',
+            location:    getProp(cls, cf.location, 'select') || getProp(cls, cf.location, 'rich_text') || '',
+            fee:         getProp(cls, cf.fee, 'number') ?? null,
+            materialFee: getProp(cls, cf.material, 'number') ?? null,
+          };
+        })
+      };
+    });
+
+    renderPreview(state.courses);
+    document.getElementById('btn-to-step3').disabled = false;
+    showSuccess(`成功獲取 ${state.courses.length} 個課程`);
+
+  } catch (err) {
+    showError('Notion API 錯誤：' + err.message);
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}
+
+// ── Notion: query all pages (handle pagination) ──────────
+async function queryAll(url, headers) {
+  const results = [];
+  let cursor = null;
+  do {
+    const body = { page_size: 100 };
+    if (cursor) body.start_cursor = cursor;
+    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`${res.status} — ${errText}`);
+    }
+    const data = await res.json();
+    results.push(...data.results);
+    cursor = data.has_more ? data.next_cursor : null;
+  } while (cursor);
+  return results;
+}
+
+// ── Notion property parsers ──────────────────────────────
+function getTitle(page) {
+  for (const [, prop] of Object.entries(page.properties || {})) {
+    if (prop.type === 'title' && prop.title?.length) {
+      return prop.title.map(t => t.plain_text).join('');
+    }
+  }
+  return '';
+}
+
+function getProp(page, propName, type) {
+  if (!propName) return null;
+  const prop = page.properties?.[propName];
+  if (!prop) return null;
+  switch (type) {
+    case 'title':
+      return prop.title?.map(t => t.plain_text).join('') || null;
+    case 'rich_text':
+      return (prop.rich_text || prop.title || []).map(t => t.plain_text).join('') || null;
+    case 'select':
+      return prop.select?.name || null;
+    case 'multi_select':
+      return prop.multi_select?.map(s => s.name).join('、') || null;
+    case 'number':
+      return prop.number ?? null;
+    case 'relation':
+      return prop.relation?.map(r => r.id) || [];
+    case 'date':
+      return prop.date?.start || null;
+    default:
+      return null;
+  }
+}
+
+function formatDates(page, propName) {
+  const rawText = getProp(page, propName, 'rich_text');
+  if (rawText) return rawText;
+  const multiSel = getProp(page, propName, 'multi_select');
+  if (multiSel) return multiSel;
+  return '';
+}
+
+// ── Render preview list ──────────────────────────────────
+function renderPreview(courses) {
+  const list = document.getElementById('preview-list');
+  list.innerHTML = '';
+  courses.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'course-row';
+    row.innerHTML = `
+      <span class="title">${c.title || '(無標題)'}</span>
+      <span class="meta">${c.classes.length} 個班別 · ${c.category || '-'}</span>
+    `;
+    list.appendChild(row);
+  });
+  document.getElementById('preview-count').textContent =
+    `共 ${courses.length} 個課程`;
+  document.getElementById('preview-wrap').style.display = 'block';
+}
+
+// ── Step 3: Scan component ───────────────────────────────
+function scanComponent(role) {
+  clearAlerts();
+  parent.postMessage({ pluginMessage: { type: 'scan-component', role } }, '*');
+}
+
+function renderCompBox(role, data) {
+  const box = document.getElementById(`${role}-comp-box`);
+  if (data.error) {
+    box.className = 'comp-box';
+    box.innerHTML = `<span class="text-muted">⚠ ${data.error}</span>`;
+    return;
+  }
+  box.className = 'comp-box scanned';
+  const warnContainer = (role === 'course' && !data.hasContainer)
+    ? `<span class="tag-warn">⚠ 缺少 ClassesContainer</span>` : '';
+  box.innerHTML = `
+    <div class="comp-name">${data.componentName}</div>
+    <div class="layer-list">${data.layers.map(l =>
+      `<code style="color:#7b61ff">${l.name}</code> `).join('')}
+    </div>
+    <div style="margin-top:4px;">
+      <span class="tag-ok">✓ ${data.layers.length} 個 # 圖層</span>
+      ${warnContainer}
+    </div>
+  `;
+  if (role === 'course') state.courseCompId = data.componentId;
+  else state.classCompId = data.componentId;
+
+  // Enable next button when both are scanned
+  if (state.courseCompId && state.classCompId) {
+    document.getElementById('btn-to-step4').disabled = false;
+  }
+}
+
+// ── Step 4: Start sync ───────────────────────────────────
+async function startSync() {
+  clearAlerts();
+  if (!state.courses?.length) return showError('尚無課程資料，請先執行步驟 2');
+  if (!state.courseCompId)    return showError('請先掃描課程卡組件');
+  if (!state.classCompId)     return showError('請先掃描班別卡組件');
+
+  const modeA = document.getElementById('mode-a').checked;
+  const modeD = document.getElementById('mode-d').checked;
+
+  if (!modeA && !modeD) return showError('請至少選擇一種同步模式');
+
+  // Reset UI
+  document.getElementById('sync-log').innerHTML = '';
+  document.getElementById('sync-log').style.display = 'none';
+  document.getElementById('progress-section').style.display = 'block';
+  document.getElementById('btn-sync').disabled = true;
+  document.getElementById('btn-back-3').disabled = true;
+  setProgress(0, '準備中...');
+
+  const syncConfig = {
+    courseComponentId: state.courseCompId,
+    classComponentId:  state.classCompId,
+  };
+
+  if (modeA) {
+    log('啟動方案 A：直接文字同步...', 'log-info');
+    parent.postMessage({
+      pluginMessage: { type: 'sync-cards', courses: state.courses, config: syncConfig }
+    }, '*');
+  }
+
+  if (modeD && !modeA) {
+    // Only D (run immediately)
+    parent.postMessage({ pluginMessage: { type: 'sync-variables', courses: state.courses } }, '*');
+  }
+
+  // modeD when modeA is also on: triggered after sync-done (see message handler)
+}
+
+// ── Progress ──────────────────────────────────────────────
+function setProgress(pct, label) {
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = label;
+}
+
+// ── Message handler (from code.js) ───────────────────────
+window.onmessage = (e) => {
+  const msg = e.data?.pluginMessage;
+  if (!msg) return;
+
+  switch (msg.type) {
+    case 'saved-config':
+      applyLoadedConfig(msg.config);
+      break;
+
+    case 'config-saved':
+      break;
+
+    case 'component-scanned':
+      renderCompBox(msg.role, msg);
+      break;
+
+    case 'sync-progress': {
+      const pct = Math.round((msg.current / msg.total) * 100);
+      setProgress(pct, `(${msg.current}/${msg.total}) ${msg.message}`);
+      log(`同步：${msg.message}`, 'log-info');
+      break;
+    }
+
+    case 'sync-done': {
+      setProgress(100, `完成！新增 ${msg.created} 張，更新 ${msg.updated} 張`);
+      log(`✅ 方案 A 完成 — 新增 ${msg.created}，更新 ${msg.updated}`, 'log-ok');
+      showSuccess(`同步完成！新增 ${msg.created} 張課程卡，更新 ${msg.updated} 張`);
+
+      // If modeD is also on, trigger it now
+      if (document.getElementById('mode-d').checked) {
+        log('啟動方案 D：建立 Figma Variables...', 'log-info');
+        parent.postMessage({ pluginMessage: { type: 'sync-variables', courses: state.courses } }, '*');
+      } else {
+        document.getElementById('btn-sync').disabled = false;
+        document.getElementById('btn-back-3').disabled = false;
+      }
+      break;
+    }
+
+    case 'variables-done':
+      log(`✅ 方案 D 完成 — ${msg.message}`, 'log-ok');
+      document.getElementById('btn-sync').disabled = false;
+      document.getElementById('btn-back-3').disabled = false;
+      break;
+
+    case 'error':
+      showError(msg.message);
+      log('❌ ' + msg.message, 'log-err');
+      document.getElementById('btn-sync').disabled = false;
+      document.getElementById('btn-back-3').disabled = false;
+      break;
+  }
+};
+
+// ── Load saved config into form ──────────────────────────
+function applyLoadedConfig(cfg) {
+  if (!cfg || !Object.keys(cfg).length) return;
+  state.config = cfg;
+  if (cfg.token)     document.getElementById('token').value     = cfg.token;
+  if (cfg.coursesDb) document.getElementById('courses-db').value = cfg.coursesDb;
+  if (cfg.classesDb)  document.getElementById('classes-db').value  = cfg.classesDb;
+
+  // Restore field mappings
+  const f = cfg.fields;
+  if (f?.course) {
+    setValue('f-course-title',      f.course.title);
+    setValue('f-course-category',   f.course.category);
+    setValue('f-course-instructor', f.course.instructor);
+    setValue('f-course-dates',      f.course.dates);
+    setValue('f-course-desc',       f.course.desc);
+    setValue('f-course-notes',      f.course.notes);
+    setValue('f-course-relation',   f.course.relation);
+  }
+  if (f?.cls) {
+    setValue('f-class-name',     f.cls.name);
+    setValue('f-class-code',     f.cls.code);
+    setValue('f-class-target',   f.cls.target);
+    setValue('f-class-quota',    f.cls.quota);
+    setValue('f-class-time',     f.cls.time);
+    setValue('f-class-location', f.cls.location);
+    setValue('f-class-fee',      f.cls.fee);
+    setValue('f-class-material', f.cls.material);
+    setValue('f-class-relation', f.cls.relation);
+  }
+}
+
+function setValue(id, val) {
+  if (val !== undefined && val !== null) {
+    const el = document.getElementById(id);
+    if (el) el.value = val;
+  }
+}
+</script>
+</body>
+</html>
