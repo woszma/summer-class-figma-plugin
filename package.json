@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "暑期班課程卡生成器 — Notion to Figma sync plugin",
   "scripts": {
-    "build": "tsc --noEmit false",
+    "build": "tsc --noEmit",
     "watch": "tsc --watch"
   },
   "devDependencies": {
