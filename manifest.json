@@ -6,7 +6,11 @@
   "ui": "ui.html",
   "editorType": ["figma"],
   "networkAccess": {
-    "allowedDomains": ["https://api.notion.com"],
-    "devAllowedDomains": ["https://api.notion.com"]
+    "allowedDomains": [
+      "https://api.notion.com",
+      "https://hook.eu2.make.com",
+      "https://hook.us1.make.com",
+      "https://hook.eu1.make.com"
+    ]
   }
 }

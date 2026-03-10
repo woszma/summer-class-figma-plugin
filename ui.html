@@ -32,7 +32,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .btn-secondary { background: #f0f0f0; color: #333; }
 .btn-outline   { background: transparent; color: #7b61ff; border: 1px solid #7b61ff; }
 .btn-sm        { padding: 5px 10px; font-size: 11px; }
-.btn-danger    { background: #fee; color: #c00; }
 /* ── Steps indicator ────────────────────────────────────── */
 .steps {
   display: flex; gap: 0; margin-bottom: 18px; border-radius: 8px;
@@ -132,6 +131,25 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   border-radius: 50%; animation: spin .6s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+/* ── Layer rename row ────────────────────────────────────── */
+.layer-row {
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px 0; font-size: 10px; line-height: 1.5;
+}
+.layer-row code { color: #7b61ff; cursor: pointer; }
+.layer-row code:hover { text-decoration: underline; }
+.btn-rename {
+  background: none; border: none; padding: 0 3px; cursor: pointer;
+  font-size: 10px; color: #bbb; line-height: 1;
+}
+.btn-rename:hover { color: #7b61ff; }
+.layer-rename-input {
+  width: 130px; padding: 1px 5px; font-size: 11px;
+  border: 1px solid #7b61ff; border-radius: 4px;
+  background: #fff; outline: none;
+}
+.btn-confirm { background: none; border: none; cursor: pointer; color: #388e3c; font-size: 12px; padding: 0 2px; }
+.btn-cancel  { background: none; border: none; cursor: pointer; color: #c62828; font-size: 12px; padding: 0 2px; }
 </style>
 </head>
 <body>
@@ -154,8 +172,13 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div class="panel active" id="panel-1">
   <h2>① Notion 連接設定</h2>
   <div class="field">
-    <label>Integration Token <span class="text-muted">（以 secret_ 開頭）</span></label>
-    <input type="password" id="token" placeholder="secret_xxxxxxxxxxxx" />
+    <label>Make.com Webhook URL</label>
+    <input type="text" id="webhook-url" placeholder="https://hook.us1.make.com/xxxxxxxx" />
+    <div class="text-muted" style="margin-top:3px;">
+      插件會同時傳送 <code style="background:#f0f0f0;padding:1px 3px;border-radius:3px;">courses_db</code> 及
+      <code style="background:#f0f0f0;padding:1px 3px;border-radius:3px;">classes_db</code> 兩個參數，
+      Make.com scenario 需查詢兩個資料庫並合併回傳。
+    </div>
   </div>
   <div class="field">
     <label>課程資料庫 ID <span class="text-muted">（32位英數字）</span></label>
@@ -166,55 +189,29 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     <input type="text" id="classes-db" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" />
   </div>
 
-  <!-- 進階：欄位名稱對應 -->
   <details style="margin-top:4px; margin-bottom:12px;">
     <summary style="cursor:pointer; font-size:11px; color:#7b61ff; font-weight:600;">
-      ▸ 進階：自訂 Notion 欄位名稱
+      ▸ 進階：Notion 關聯欄位名稱
     </summary>
     <div style="margin-top:10px; padding:10px; background:#f8f7ff; border-radius:8px;">
-      <p class="text-muted" style="margin-bottom:8px;">若你的 Notion 資料庫欄位名稱與預設不同，請在此修改。</p>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <div>
-          <p style="font-size:10px; font-weight:700; color:#7b61ff; margin-bottom:4px;">課程資料庫</p>
-          <label>課程名稱 (Title)</label>
-          <input type="text" id="f-course-title" placeholder="課程名稱" value="課程名稱" style="margin-bottom:4px;" />
-          <label>類別</label>
-          <input type="text" id="f-course-category" placeholder="類別" value="類別" style="margin-bottom:4px;" />
-          <label>導師</label>
-          <input type="text" id="f-course-instructor" placeholder="導師" value="導師" style="margin-bottom:4px;" />
-          <label>上課日期</label>
-          <input type="text" id="f-course-dates" placeholder="上課日期" value="上課日期" style="margin-bottom:4px;" />
-          <label>課程描述</label>
-          <input type="text" id="f-course-desc" placeholder="課程描述" value="課程描述" style="margin-bottom:4px;" />
-          <label>備註</label>
-          <input type="text" id="f-course-notes" placeholder="備註" value="備註" style="margin-bottom:4px;" />
-          <label>班別關聯 (Relation)</label>
-          <input type="text" id="f-course-relation" placeholder="相關班別" value="相關班別" />
-        </div>
-        <div>
-          <p style="font-size:10px; font-weight:700; color:#7b61ff; margin-bottom:4px;">班別資料庫</p>
-          <label>班別名稱 (Title)</label>
-          <input type="text" id="f-class-name" placeholder="班別名稱" value="班別名稱" style="margin-bottom:4px;" />
-          <label>編號</label>
-          <input type="text" id="f-class-code" placeholder="編號" value="編號" style="margin-bottom:4px;" />
-          <label>對象</label>
-          <input type="text" id="f-class-target" placeholder="對象" value="對象" style="margin-bottom:4px;" />
-          <label>名額</label>
-          <input type="text" id="f-class-quota" placeholder="名額" value="名額" style="margin-bottom:4px;" />
-          <label>時間</label>
-          <input type="text" id="f-class-time" placeholder="時間" value="時間" style="margin-bottom:4px;" />
-          <label>地點</label>
-          <input type="text" id="f-class-location" placeholder="地點" value="地點" style="margin-bottom:4px;" />
-          <label>費用</label>
-          <input type="text" id="f-class-fee" placeholder="費用" value="費用" style="margin-bottom:4px;" />
-          <label>材料費</label>
-          <input type="text" id="f-class-material" placeholder="材料費" value="材料費" style="margin-bottom:4px;" />
-          <label>所屬課程 (Relation)</label>
-          <input type="text" id="f-class-relation" placeholder="所屬課程" value="所屬課程" />
-        </div>
-      </div>
+      <p class="text-muted" style="margin-bottom:8px;">
+        插件透過「班別→課程」的 Relation 欄位來分組班別。<br/>
+        若你的 Relation 欄位名稱不是預設值，請在此修改。
+      </p>
+      <label>班別資料庫中，指向課程的 Relation 欄位名稱</label>
+      <input type="text" id="f-class-relation" placeholder="所屬課程" value="所屬課程" />
     </div>
   </details>
+
+  <div class="card" style="background:#fffbeb; border-color:#fde68a;">
+    <div class="card-title" style="color:#92400e;">💡 Figma 圖層命名規則</div>
+    <p style="font-size:10.5px; color:#78350f; line-height:1.6;">
+      圖層名稱用 <strong>#</strong> 開頭，後接 <strong>Notion 欄位名稱</strong>，插件會自動對應。<br/>
+      例如：<code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">#課程名稱</code>
+      <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">#導師</code>
+      <code style="background:#fef3c7; padding:1px 4px; border-radius:3px;">#費用</code>
+    </p>
+  </div>
 
   <div class="nav-row">
     <button class="btn-primary" onclick="saveConfigAndNext()">儲存並繼續 →</button>
@@ -254,16 +251,16 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <h2>③ 設定 Figma 組件</h2>
   <p class="text-muted" style="margin-bottom:12px;">
     請在 Figma 畫布上選取對應的組件，再點擊「讀取組件」按鈕。<br/>
-    組件內需有 <strong>#</strong> 開頭的圖層供插件填入資料。
+    圖層名稱用 <strong>#Notion欄位名</strong> 命名，插件會自動填入對應值。<br/>
+    課程主卡須包含名為 <strong>ClassesContainer</strong> 的容器框架。
   </p>
 
   <!-- 課程卡 -->
   <div class="card">
     <div class="card-title">課程主卡（CourseCard）</div>
     <p class="text-muted" style="margin-bottom:8px;">
-      需含 #course-title、#course-category、#course-instructor、
-      #course-dates、#course-description、#course-notes 及
-      名為「ClassesContainer」的容器框架。
+      例：<code>#課程名稱</code>、<code>#類別</code>、<code>#導師</code>、<code>#上課日期</code>...
+      以及名為「ClassesContainer」的 Auto Layout 垂直容器。
     </p>
     <div class="comp-box" id="course-comp-box">
       <span class="text-muted">尚未選取</span>
@@ -277,8 +274,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <div class="card">
     <div class="card-title">班別子卡（ClassCard）</div>
     <p class="text-muted" style="margin-bottom:8px;">
-      需含 #class-name、#class-id、#class-target、#class-quota、
-      #class-time、#class-location、#class-fee。
+      例：<code>#班別名稱</code>、<code>#編號</code>、<code>#對象</code>、<code>#費用</code>...
     </p>
     <div class="comp-box" id="class-comp-box">
       <span class="text-muted">尚未選取</span>
@@ -302,7 +298,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div class="panel" id="panel-4">
   <h2>④ 同步到 Figma</h2>
 
-  <!-- 方案 A -->
   <div class="toggle-row">
     <input type="checkbox" id="mode-a" checked />
     <div class="toggle-label">
@@ -311,7 +306,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     </div>
   </div>
 
-  <!-- 方案 D -->
   <div class="toggle-row">
     <input type="checkbox" id="mode-d" />
     <div class="toggle-label">
@@ -320,7 +314,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     </div>
   </div>
 
-  <!-- 進度 -->
   <div id="progress-section" style="display:none; margin: 10px 0;">
     <div class="progress-wrap">
       <div class="progress-bar-bg">
@@ -330,7 +323,6 @@ button:disabled { opacity: .45; cursor: not-allowed; }
     </div>
   </div>
 
-  <!-- Log -->
   <div id="sync-log"></div>
 
   <div class="nav-row">
@@ -341,14 +333,19 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 <!-- ════════════════════════════════════════════════════ -->
 <script>
+// ── Proxy URL 從 state.config.webhookUrl 讀取 ──────────
+
 // ── State ───────────────────────────────────────────────
 const state = {
   step: 1,
   config: {},
-  courses: null,       // CourseCardData[]
+  courses: null,
   courseCompId: null,
   classCompId: null,
+  courseCompData: null,   // 掃描結果快取，供 rename 後重新渲染
+  classCompData: null,
 };
+let editingLayer = null; // { role, nodeId }
 
 // ── Step Navigation ──────────────────────────────────────
 function goStep(n) {
@@ -393,41 +390,20 @@ function log(msg, cls = 'log-info') {
 
 // ── Step 1: Save config ──────────────────────────────────
 function saveConfigAndNext() {
-  const token    = document.getElementById('token').value.trim();
-  const coursesDb = document.getElementById('courses-db').value.trim().replace(/[-\s]/g,'');
-  const classesDb  = document.getElementById('classes-db').value.trim().replace(/[-\s]/g,'');
+  const webhookUrl = document.getElementById('webhook-url').value.trim();
+  const coursesDb  = document.getElementById('courses-db').value.trim().replace(/[-\s]/g, '');
+  const classesDb  = document.getElementById('classes-db').value.trim().replace(/[-\s]/g, '');
 
-  if (!token || !coursesDb || !classesDb) {
-    return showError('請填寫 Notion Token 及兩個資料庫 ID');
+  if (!webhookUrl || !coursesDb || !classesDb) {
+    return showError('請填寫 Make.com Webhook URL 及兩個資料庫 ID');
   }
-  if (!token.startsWith('secret_') && !token.startsWith('ntn_')) {
-    return showError('Token 格式不正確，應以 secret_ 或 ntn_ 開頭');
+  if (!webhookUrl.startsWith('https://')) {
+    return showError('Webhook URL 格式不正確，應以 https:// 開頭');
   }
 
   state.config = {
-    token, coursesDb, classesDb,
-    fields: {
-      course: {
-        title:      document.getElementById('f-course-title').value || '課程名稱',
-        category:   document.getElementById('f-course-category').value || '類別',
-        instructor: document.getElementById('f-course-instructor').value || '導師',
-        dates:      document.getElementById('f-course-dates').value || '上課日期',
-        desc:       document.getElementById('f-course-desc').value || '課程描述',
-        notes:      document.getElementById('f-course-notes').value || '備註',
-        relation:   document.getElementById('f-course-relation').value || '相關班別',
-      },
-      cls: {
-        name:     document.getElementById('f-class-name').value || '班別名稱',
-        code:     document.getElementById('f-class-code').value || '編號',
-        target:   document.getElementById('f-class-target').value || '對象',
-        quota:    document.getElementById('f-class-quota').value || '名額',
-        time:     document.getElementById('f-class-time').value || '時間',
-        location: document.getElementById('f-class-location').value || '地點',
-        fee:      document.getElementById('f-class-fee').value || '費用',
-        material: document.getElementById('f-class-material').value || '材料費',
-        relation: document.getElementById('f-class-relation').value || '所屬課程',
-      }
-    }
+    webhookUrl, coursesDb, classesDb,
+    classRelation: document.getElementById('f-class-relation').value.trim() || '所屬課程',
   };
 
   parent.postMessage({ pluginMessage: { type: 'save-config', config: state.config } }, '*');
@@ -437,61 +413,51 @@ function saveConfigAndNext() {
 // ── Step 2: Fetch Notion Data ────────────────────────────
 async function fetchNotionData() {
   clearAlerts();
-  const btn = document.getElementById('btn-fetch');
+  const btn     = document.getElementById('btn-fetch');
   const spinner = document.getElementById('fetch-spinner');
   btn.disabled = true;
   spinner.style.display = 'inline-block';
 
   try {
-    const { token, coursesDb, classesDb, fields } = state.config;
-    const headers = {
-      'Authorization': `Bearer ${token}`,
-      'Notion-Version': '2022-06-28',
-      'Content-Type': 'application/json'
-    };
+    const { coursesDb, classesDb, classRelation } = state.config;
 
-    // Fetch all courses
-    const coursesRaw = await queryAll(`https://api.notion.com/v1/databases/${coursesDb}/query`, headers);
-    // Fetch all classes
-    const classesRaw = await queryAll(`https://api.notion.com/v1/databases/${classesDb}/query`, headers);
+    // 發送一次請求，帶兩個資料庫 ID，Make.com 回傳所有資料
+    // 再用每頁的 parent.database_id 分拆課程 / 班別
+    const allPages = await queryAll(coursesDb, classesDb);
+    const coursesRaw = allPages.filter(p => matchDb(p, coursesDb));
+    const classesRaw = allPages.filter(p => matchDb(p, classesDb));
 
-    // Group classes by course ID (via class→course relation)
+    // 如果分拆後課程為 0，試退回只用第一個資料庫 ID 的方式
+    // （兼容 Make.com 只配置單一資料庫的情況）
+    if (coursesRaw.length === 0 && classesRaw.length === 0 && allPages.length > 0) {
+      showError('⚠ 無法分拆資料，請確認 Make.com scenario 有查詢兩個資料庫');
+    }
+
+    // 用班別的 Relation 欄位分組（班別 → 課程）
     const classesByCourse = new Map();
     for (const cls of classesRaw) {
-      const courseIds = getProp(cls, fields.cls.relation, 'relation') || [];
+      // 兼容 Array（Make.com）及 Object（標準 Notion）格式
+      const properties = cls.properties;
+      const relProp = Array.isArray(properties)
+        ? properties.find(p => p.label === classRelation)
+        : properties?.[classRelation];
+      const courseIds = relProp?.relation?.map(r => r.id) || [];
       for (const cid of courseIds) {
         if (!classesByCourse.has(cid)) classesByCourse.set(cid, []);
         classesByCourse.get(cid).push(cls);
       }
     }
 
-    // Build CourseCardData[]
-    state.courses = coursesRaw.map(course => {
-      const f = fields.course;
-      return {
-        courseId:    course.id,
-        title:       getTitle(course) || getProp(course, f.title, 'rich_text') || '',
-        category:    getProp(course, f.category, 'select') || '',
-        instructor:  getProp(course, f.instructor, 'rich_text') || '',
-        dates:       formatDates(course, f.dates),
-        description: getProp(course, f.desc, 'rich_text') || '',
-        notes:       getProp(course, f.notes, 'rich_text') || '',
-        classes: (classesByCourse.get(course.id) || []).map(cls => {
-          const cf = fields.cls;
-          return {
-            classId:     cls.id,
-            name:        getTitle(cls) || getProp(cls, cf.name, 'rich_text') || '',
-            code:        getProp(cls, cf.code, 'number') ?? getProp(cls, cf.code, 'rich_text') ?? '',
-            target:      getProp(cls, cf.target, 'rich_text') || '',
-            quota:       getProp(cls, cf.quota, 'number') ?? null,
-            time:        getProp(cls, cf.time, 'rich_text') || '',
-            location:    getProp(cls, cf.location, 'select') || getProp(cls, cf.location, 'rich_text') || '',
-            fee:         getProp(cls, cf.fee, 'number') ?? null,
-            materialFee: getProp(cls, cf.material, 'number') ?? null,
-          };
-        })
-      };
-    });
+    // 每個 Notion page 的所有欄位值提取為 props 字典
+    state.courses = coursesRaw.map(course => ({
+      courseId: course.id,
+      title:    getTitle(course),
+      props:    extractAllProps(course),
+      classes:  (classesByCourse.get(course.id) || []).map(cls => ({
+        classId: cls.id,
+        props:   extractAllProps(cls),
+      })),
+    }));
 
     renderPreview(state.courses);
     document.getElementById('btn-to-step3').disabled = false;
@@ -505,28 +471,62 @@ async function fetchNotionData() {
   }
 }
 
-// ── Notion: query all pages (handle pagination) ──────────
-async function queryAll(url, headers) {
-  const results = [];
-  let cursor = null;
-  do {
-    const body = { page_size: 100 };
-    if (cursor) body.start_cursor = cursor;
-    const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`${res.status} — ${errText}`);
-    }
-    const data = await res.json();
-    results.push(...data.results);
-    cursor = data.has_more ? data.next_cursor : null;
-  } while (cursor);
-  return results;
+// ── 提取單個 Notion property 的值 ───────────────────────
+function extractPropValue(prop) {
+  switch (prop.type) {
+    case 'title':
+      return (prop.title || []).map(t => t.plain_text).join('');
+    case 'rich_text':
+      return (prop.rich_text || []).map(t => t.plain_text).join('');
+    case 'select':
+      return prop.select ? prop.select.name : '';
+    case 'multi_select':
+      return (prop.multi_select || []).map(s => s.name).join('、');
+    case 'number':
+      return prop.number != null ? String(prop.number) : '';
+    case 'date':
+      return prop.date ? prop.date.start : '';
+    case 'checkbox':
+      return prop.checkbox === true; // boolean 供 code.js 控制 show/hide
+    default:
+      return null; // 略過 relation、rollup、formula 等
+  }
 }
 
-// ── Notion property parsers ──────────────────────────────
+// ── 提取 Notion page 所有欄位為 { 欄位名: 字串值 } ─────
+// 支援 Make.com 格式（properties 為 Array with label）及標準格式
+function extractAllProps(page) {
+  const props = {};
+  const properties = page.properties;
+
+  if (Array.isArray(properties)) {
+    // Make.com 格式：properties 是陣列，每個有 label 欄位
+    for (const prop of properties) {
+      const name = prop.label;
+      if (!name) continue;
+      const val = extractPropValue(prop);
+      if (val === null) continue;
+      props[name] = val;
+    }
+  } else if (properties && typeof properties === 'object') {
+    // 標準 Notion API 格式：properties 是物件
+    for (const name in properties) {
+      const val = extractPropValue(properties[name]);
+      if (val === null) continue;
+      props[name] = val;
+    }
+  }
+
+  return props;
+}
+
+// ── Notion: 獲取 title 欄位（兼容 Array 及 Object 格式）─
 function getTitle(page) {
-  for (const [, prop] of Object.entries(page.properties || {})) {
+  const properties = page.properties;
+  const list = Array.isArray(properties)
+    ? properties
+    : Object.values(properties || {});
+  for (const prop of list) {
     if (prop.type === 'title' && prop.title?.length) {
       return prop.title.map(t => t.plain_text).join('');
     }
@@ -534,36 +534,44 @@ function getTitle(page) {
   return '';
 }
 
-function getProp(page, propName, type) {
-  if (!propName) return null;
-  const prop = page.properties?.[propName];
-  if (!prop) return null;
-  switch (type) {
-    case 'title':
-      return prop.title?.map(t => t.plain_text).join('') || null;
-    case 'rich_text':
-      return (prop.rich_text || prop.title || []).map(t => t.plain_text).join('') || null;
-    case 'select':
-      return prop.select?.name || null;
-    case 'multi_select':
-      return prop.multi_select?.map(s => s.name).join('、') || null;
-    case 'number':
-      return prop.number ?? null;
-    case 'relation':
-      return prop.relation?.map(r => r.id) || [];
-    case 'date':
-      return prop.date?.start || null;
-    default:
-      return null;
-  }
+// ── 判斷 page 是否屬於某個資料庫（兼容 dashed / undashed ID）─
+function matchDb(page, dbId) {
+  const parentDbId = (page.parent?.database_id || '').replace(/-/g, '');
+  return parentDbId === dbId.replace(/-/g, '');
 }
 
-function formatDates(page, propName) {
-  const rawText = getProp(page, propName, 'rich_text');
-  if (rawText) return rawText;
-  const multiSel = getProp(page, propName, 'multi_select');
-  if (multiSel) return multiSel;
-  return '';
+// ── Notion: 查詢（Make.com Webhook 回應格式）──────────
+// 回應格式：[{ body: "IMTString(N): [{raw: '...'}, ...]", status: 200, headers: [] }]
+// 支援傳入兩個資料庫 ID（合併一次請求），或單一 database_id（向後兼容）
+async function queryAll(coursesDbId, classesDbId) {
+  const body = classesDbId
+    ? { courses_db: coursesDbId, classes_db: classesDbId }
+    : { database_id: coursesDbId };
+
+  const res = await fetch(state.config.webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`${res.status} — ${errText}`);
+  }
+  const data = await res.json();
+
+  // Make.com 格式：[{ body: "IMTString(N): [...]", status: 200, headers: [] }]
+  if (Array.isArray(data) && data[0]?.body) {
+    const bodyStr = data[0].body;
+    const jsonStart = bodyStr.indexOf('[');
+    if (jsonStart === -1) throw new Error('無法解析 Make.com 回應格式');
+    const rawArray = JSON.parse(bodyStr.slice(jsonStart));
+    return rawArray
+      .map(item => (typeof item.raw === 'string' ? JSON.parse(item.raw) : item))
+      .filter(page => !page.in_trash);
+  }
+
+  // 備用：標準 Notion API 格式
+  return data.results || [];
 }
 
 // ── Render preview list ──────────────────────────────────
@@ -575,12 +583,11 @@ function renderPreview(courses) {
     row.className = 'course-row';
     row.innerHTML = `
       <span class="title">${c.title || '(無標題)'}</span>
-      <span class="meta">${c.classes.length} 個班別 · ${c.category || '-'}</span>
+      <span class="meta">${c.classes.length} 個班別</span>
     `;
     list.appendChild(row);
   });
-  document.getElementById('preview-count').textContent =
-    `共 ${courses.length} 個課程`;
+  document.getElementById('preview-count').textContent = `共 ${courses.length} 個課程`;
   document.getElementById('preview-wrap').style.display = 'block';
 }
 
@@ -591,32 +598,97 @@ function scanComponent(role) {
 }
 
 function renderCompBox(role, data) {
+  editingLayer = null;
   const box = document.getElementById(`${role}-comp-box`);
   if (data.error) {
     box.className = 'comp-box';
     box.innerHTML = `<span class="text-muted">⚠ ${data.error}</span>`;
     return;
   }
+
+  // 快取掃描結果供 rename 後重繪
+  if (role === 'course') { state.courseCompData = data; state.courseCompId = data.componentId; }
+  else                   { state.classCompData  = data; state.classCompId  = data.componentId; }
+
   box.className = 'comp-box scanned';
   const warnContainer = (role === 'course' && !data.hasContainer)
     ? `<span class="tag-warn">⚠ 缺少 ClassesContainer</span>` : '';
+
+  const layersHtml = data.layers.map(l => `
+    <div class="layer-row" id="layer-row-${l.id}">
+      <code onclick="editLayer('${role}','${l.id}','${l.name}')">${l.name}</code>
+      <button class="btn-rename" title="重命名" onclick="editLayer('${role}','${l.id}','${l.name}')">✏</button>
+    </div>`).join('');
+
   box.innerHTML = `
     <div class="comp-name">${data.componentName}</div>
-    <div class="layer-list">${data.layers.map(l =>
-      `<code style="color:#7b61ff">${l.name}</code> `).join('')}
-    </div>
+    <div class="layer-list">${layersHtml}</div>
     <div style="margin-top:4px;">
       <span class="tag-ok">✓ ${data.layers.length} 個 # 圖層</span>
       ${warnContainer}
     </div>
   `;
-  if (role === 'course') state.courseCompId = data.componentId;
-  else state.classCompId = data.componentId;
 
-  // Enable next button when both are scanned
   if (state.courseCompId && state.classCompId) {
     document.getElementById('btn-to-step4').disabled = false;
   }
+}
+
+// ── Rename layer ─────────────────────────────────────────
+function editLayer(role, nodeId, currentName) {
+  if (editingLayer) cancelEdit();
+  editingLayer = { role, nodeId };
+
+  const row = document.getElementById('layer-row-' + nodeId);
+  if (!row) return;
+
+  // 建立 datalist：來自已抓取的 Notion 欄位名稱
+  const fields = getNotionFields(role);
+  const dlId = 'dl-' + nodeId;
+  const propName = currentName.startsWith('#') ? currentName.slice(1) : currentName;
+
+  row.innerHTML = `
+    <span style="color:#7b61ff; font-size:11px;">#</span>
+    <input class="layer-rename-input" id="input-${nodeId}"
+           value="${propName}" list="${dlId}"
+           onkeydown="handleRenameKey(event,'${role}','${nodeId}')" />
+    <datalist id="${dlId}">${fields.map(f => `<option value="${f}">`).join('')}</datalist>
+    <button class="btn-confirm" title="確認" onclick="confirmRename('${role}','${nodeId}')">✓</button>
+    <button class="btn-cancel"  title="取消" onclick="cancelEdit()">✗</button>
+  `;
+  const input = document.getElementById('input-' + nodeId);
+  input.focus();
+  input.select();
+}
+
+function handleRenameKey(event, role, nodeId) {
+  if (event.key === 'Enter')  confirmRename(role, nodeId);
+  if (event.key === 'Escape') cancelEdit();
+}
+
+function confirmRename(role, nodeId) {
+  const input = document.getElementById('input-' + nodeId);
+  if (!input) return;
+  const newPropName = input.value.trim();
+  if (!newPropName) return cancelEdit();
+  parent.postMessage({
+    pluginMessage: { type: 'rename-layer', nodeId, newName: '#' + newPropName, role }
+  }, '*');
+}
+
+function cancelEdit() {
+  if (!editingLayer) return;
+  const { role } = editingLayer;
+  const data = role === 'course' ? state.courseCompData : state.classCompData;
+  if (data) renderCompBox(role, data);
+  editingLayer = null;
+}
+
+function getNotionFields(role) {
+  if (!state.courses || !state.courses.length) return [];
+  if (role === 'course') return Object.keys(state.courses[0].props || {});
+  const classes = state.courses.flatMap(c => c.classes);
+  return classes.length ? Object.keys(classes[0].props || {}) : [];
 }
 
 // ── Step 4: Start sync ───────────────────────────────────
@@ -628,10 +700,8 @@ async function startSync() {
 
   const modeA = document.getElementById('mode-a').checked;
   const modeD = document.getElementById('mode-d').checked;
-
   if (!modeA && !modeD) return showError('請至少選擇一種同步模式');
 
-  // Reset UI
   document.getElementById('sync-log').innerHTML = '';
   document.getElementById('sync-log').style.display = 'none';
   document.getElementById('progress-section').style.display = 'block';
@@ -652,11 +722,8 @@ async function startSync() {
   }
 
   if (modeD && !modeA) {
-    // Only D (run immediately)
     parent.postMessage({ pluginMessage: { type: 'sync-variables', courses: state.courses } }, '*');
   }
-
-  // modeD when modeA is also on: triggered after sync-done (see message handler)
 }
 
 // ── Progress ──────────────────────────────────────────────
@@ -682,6 +749,18 @@ window.onmessage = (e) => {
       renderCompBox(msg.role, msg);
       break;
 
+    case 'layer-renamed': {
+      // 更新快取中的圖層名稱，重新渲染
+      const compData = msg.role === 'course' ? state.courseCompData : state.classCompData;
+      if (compData) {
+        const layer = compData.layers.find(l => l.id === msg.nodeId);
+        if (layer) layer.name = msg.newName;
+        editingLayer = null;
+        renderCompBox(msg.role, compData);
+      }
+      break;
+    }
+
     case 'sync-progress': {
       const pct = Math.round((msg.current / msg.total) * 100);
       setProgress(pct, `(${msg.current}/${msg.total}) ${msg.message}`);
@@ -694,7 +773,6 @@ window.onmessage = (e) => {
       log(`✅ 方案 A 完成 — 新增 ${msg.created}，更新 ${msg.updated}`, 'log-ok');
       showSuccess(`同步完成！新增 ${msg.created} 張課程卡，更新 ${msg.updated} 張`);
 
-      // If modeD is also on, trigger it now
       if (document.getElementById('mode-d').checked) {
         log('啟動方案 D：建立 Figma Variables...', 'log-info');
         parent.postMessage({ pluginMessage: { type: 'sync-variables', courses: state.courses } }, '*');
@@ -724,39 +802,10 @@ window.onmessage = (e) => {
 function applyLoadedConfig(cfg) {
   if (!cfg || !Object.keys(cfg).length) return;
   state.config = cfg;
-  if (cfg.token)     document.getElementById('token').value     = cfg.token;
-  if (cfg.coursesDb) document.getElementById('courses-db').value = cfg.coursesDb;
-  if (cfg.classesDb)  document.getElementById('classes-db').value  = cfg.classesDb;
-
-  // Restore field mappings
-  const f = cfg.fields;
-  if (f?.course) {
-    setValue('f-course-title',      f.course.title);
-    setValue('f-course-category',   f.course.category);
-    setValue('f-course-instructor', f.course.instructor);
-    setValue('f-course-dates',      f.course.dates);
-    setValue('f-course-desc',       f.course.desc);
-    setValue('f-course-notes',      f.course.notes);
-    setValue('f-course-relation',   f.course.relation);
-  }
-  if (f?.cls) {
-    setValue('f-class-name',     f.cls.name);
-    setValue('f-class-code',     f.cls.code);
-    setValue('f-class-target',   f.cls.target);
-    setValue('f-class-quota',    f.cls.quota);
-    setValue('f-class-time',     f.cls.time);
-    setValue('f-class-location', f.cls.location);
-    setValue('f-class-fee',      f.cls.fee);
-    setValue('f-class-material', f.cls.material);
-    setValue('f-class-relation', f.cls.relation);
-  }
-}
-
-function setValue(id, val) {
-  if (val !== undefined && val !== null) {
-    const el = document.getElementById(id);
-    if (el) el.value = val;
-  }
+  if (cfg.webhookUrl)    document.getElementById('webhook-url').value      = cfg.webhookUrl;
+  if (cfg.coursesDb)     document.getElementById('courses-db').value       = cfg.coursesDb;
+  if (cfg.classesDb)     document.getElementById('classes-db').value       = cfg.classesDb;
+  if (cfg.classRelation) document.getElementById('f-class-relation').value = cfg.classRelation;
 }
 </script>
 </body>
