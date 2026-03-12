@@ -32,6 +32,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .btn-secondary { background: #f0f0f0; color: #333; }
 .btn-outline   { background: transparent; color: #7b61ff; border: 1px solid #7b61ff; }
 .btn-sm        { padding: 5px 10px; font-size: 11px; }
+.btn-danger    { background: #ef4444; color: #fff; }
 /* ── Steps indicator ────────────────────────────────────── */
 .steps {
   display: flex; gap: 0; margin-bottom: 18px; border-radius: 8px;
@@ -223,14 +224,24 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <!-- ════════════════════════════════════════════════════ -->
 <div class="panel" id="panel-2">
   <h2>② 獲取 Notion 資料</h2>
-  <button class="btn-secondary" onclick="fetchNotionData()" id="btn-fetch">
+
+  <!-- 快取資料提示欄 -->
+  <div id="cache-bar" style="display:none; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 12px; margin-bottom:10px;">
+    <div style="font-size:11px; color:#166534; font-weight:600; margin-bottom:6px;">已有快取資料</div>
+    <div style="font-size:10.5px; color:#15803d; margin-bottom:8px;" id="cache-time"></div>
+    <div style="display:flex; gap:6px;">
+      <button class="btn-secondary btn-sm" style="flex:1; background:#dcfce7; color:#166534;" onclick="useCachedData()">使用快取資料</button>
+      <button class="btn-secondary btn-sm" style="color:#888;" onclick="clearCache()">清除</button>
+    </div>
+  </div>
+
+  <button class="btn-secondary" onclick="fetchNotionData()" id="btn-fetch" style="width:100%">
     <span id="fetch-spinner" style="display:none" class="spinner"></span>
-    獲取課程資料
+    重新從 Notion 獲取
   </button>
   <div id="preview-wrap" style="display:none; margin-top:12px;">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
       <span id="preview-count" class="text-muted"></span>
-      <button class="btn-sm btn-outline" onclick="fetchNotionData()">重新獲取</button>
     </div>
     <div class="card" style="padding:0; overflow:hidden;">
       <div id="preview-list"></div>
@@ -238,6 +249,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   </div>
   <div class="nav-row" style="margin-top:12px;">
     <button class="btn-secondary btn-sm" onclick="goStep(1)">← 返回</button>
+    <button class="btn-secondary btn-sm" id="btn-debug" style="display:none" onclick="showDebug()">🔍 Debug</button>
     <button class="btn-primary" id="btn-to-step3" onclick="goStep(3)" disabled>
       下一步：選擇組件 →
     </button>
@@ -298,6 +310,39 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 <div class="panel" id="panel-4">
   <h2>④ 同步到 Figma</h2>
 
+  <div class="field">
+    <label>排序欄位（選填）</label>
+    <div style="display:flex;gap:6px;">
+      <select id="sort-prop" style="flex:1">
+        <option value="">— 不排序 —</option>
+      </select>
+      <select id="sort-dir" style="width:80px">
+        <option value="asc">升序 ↑</option>
+        <option value="desc">降序 ↓</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="toggle-row">
+    <input type="checkbox" id="group-by-code" onchange="toggleGroupOptions()" />
+    <div class="toggle-label">
+      <div class="toggle-title">按編號 + 星期自動分組</div>
+      <div class="toggle-desc">相鄰編號且同星期的班別，合併入同一課程卡；其餘各自獨立</div>
+    </div>
+  </div>
+  <div id="group-options" style="display:none; margin: 6px 0 8px 24px;">
+    <div style="display:flex; gap:6px; margin-bottom:6px;">
+      <div style="flex:1">
+        <label style="font-size:10px;">班別編號欄位</label>
+        <select id="group-code-field"></select>
+      </div>
+      <div style="flex:1">
+        <label style="font-size:10px;">星期欄位</label>
+        <select id="group-week-field"></select>
+      </div>
+    </div>
+  </div>
+
   <div class="toggle-row">
     <input type="checkbox" id="mode-a" checked />
     <div class="toggle-label">
@@ -328,6 +373,17 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <div class="nav-row">
     <button class="btn-secondary btn-sm" id="btn-back-3" onclick="goStep(3)">← 返回</button>
     <button class="btn-primary" id="btn-sync" onclick="startSync()">開始同步</button>
+    <button class="btn-danger btn-sm" id="btn-stop-sync" style="display:none" onclick="stopSync()">⏹ 停止</button>
+  </div>
+</div>
+
+<!-- ════ Debug Modal ════════════════════════════════════ -->
+<div id="debug-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:999; overflow-y:auto; padding:16px;">
+  <div style="background:#1e1e2e; border-radius:10px; padding:16px; color:#cdd6f4; font-family:monospace; font-size:11px; position:relative;">
+    <button onclick="document.getElementById('debug-modal').style.display='none'"
+      style="position:absolute; top:10px; right:12px; background:#f38ba8; border:none; border-radius:4px; color:#1e1e2e; font-weight:700; padding:2px 8px; cursor:pointer;">✕</button>
+    <div style="font-size:13px; font-weight:700; margin-bottom:12px; color:#cba6f7;">🔍 Debug 資料</div>
+    <pre id="debug-content" style="white-space:pre-wrap; word-break:break-all; margin:0; line-height:1.6;"></pre>
   </div>
 </div>
 
@@ -344,6 +400,7 @@ const state = {
   classCompId: null,
   courseCompData: null,   // 掃描結果快取，供 rename 後重新渲染
   classCompData: null,
+  _debug: null,           // debug 資料
 };
 let editingLayer = null; // { role, nodeId }
 
@@ -359,6 +416,112 @@ function goStep(n) {
     else if (i + 1 < n) t.classList.add('done');
   });
   clearAlerts();
+  if (n === 4) { populateSortOptions(); populateGroupFieldOptions(); }
+}
+
+function toggleGroupOptions() {
+  const on = document.getElementById('group-by-code').checked;
+  document.getElementById('group-options').style.display = on ? 'block' : 'none';
+  if (on) populateGroupFieldOptions();
+}
+
+// ── 填充分組欄位下拉選單 ─────────────────────────────────
+function populateGroupFieldOptions() {
+  const courseKeys = [], classKeys = [];
+  const seenCourse = new Set(), seenClass = new Set();
+  (state.courses || []).forEach(c => {
+    Object.keys(c.props || {}).forEach(k => {
+      if (!seenCourse.has(k)) { seenCourse.add(k); courseKeys.push(k); }
+    });
+    (c.classes || []).forEach(cls => {
+      Object.keys(cls.props || {}).forEach(k => {
+        if (!seenClass.has(k)) { seenClass.add(k); classKeys.push(k); }
+      });
+    });
+  });
+  const allKeys = new Set([...courseKeys, ...classKeys]);
+
+  const codeSel = document.getElementById('group-code-field');
+  const weekSel = document.getElementById('group-week-field');
+  const prevCode = codeSel.value;
+  const prevWeek = weekSel.value;
+
+  // 編號欄位：班別欄位為主（加 optgroup 分區）
+  codeSel.innerHTML = '';
+  if (classKeys.length) {
+    const og = document.createElement('optgroup'); og.label = '班別欄位';
+    classKeys.forEach(k => og.appendChild(new Option(k, k)));
+    codeSel.appendChild(og);
+  }
+  if (courseKeys.length) {
+    const og = document.createElement('optgroup'); og.label = '課程欄位';
+    courseKeys.forEach(k => og.appendChild(new Option(k, 'course:' + k)));
+    codeSel.appendChild(og);
+  }
+
+  // 星期欄位：課程 + 班別都可選
+  weekSel.innerHTML = '<option value="">— 留空（從名稱/時間推斷）—</option>';
+  if (courseKeys.length) {
+    const og = document.createElement('optgroup'); og.label = '課程欄位';
+    courseKeys.forEach(k => og.appendChild(new Option(k, 'course:' + k)));
+    weekSel.appendChild(og);
+  }
+  if (classKeys.length) {
+    const og = document.createElement('optgroup'); og.label = '班別欄位';
+    classKeys.forEach(k => og.appendChild(new Option(k, k)));
+    weekSel.appendChild(og);
+  }
+
+  // 優先套用儲存設定，否則還原上次選擇，最後用預設值
+  const s4 = state.config.step4 || {};
+  codeSel.value = s4.groupCodeField || prevCode || '';
+  if (!codeSel.value) codeSel.value = seenClass.has('編號') ? '編號' : (classKeys[0] || '');
+
+  weekSel.value = s4.groupWeekField !== undefined ? s4.groupWeekField : (prevWeek || '');
+  if (!weekSel.value) {
+    weekSel.value = seenCourse.has('星期') ? 'course:星期'
+      : seenClass.has('星期')  ? '星期'
+      : seenCourse.has('時間') ? 'course:時間'
+      : seenClass.has('時間')  ? '時間' : '';
+  }
+}
+
+function populateSortOptions() {
+  const sel = document.getElementById('sort-prop');
+  const current = sel.value;
+  const courseKeys = new Set();
+  const classKeys  = new Set();
+  (state.courses || []).forEach(c => {
+    Object.keys(c.props || {}).forEach(k => courseKeys.add(k));
+    (c.classes || []).forEach(cls => Object.keys(cls.props || {}).forEach(k => classKeys.add(k)));
+  });
+  sel.innerHTML = '<option value="">— 不排序 —</option>';
+  if (courseKeys.size) {
+    const og = document.createElement('optgroup');
+    og.label = '課程欄位';
+    courseKeys.forEach(k => {
+      const o = document.createElement('option');
+      o.value = 'course:' + k; o.textContent = k;
+      if ('course:' + k === current) o.selected = true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  if (classKeys.size) {
+    const og = document.createElement('optgroup');
+    og.label = '班別欄位（按首個班別排序）';
+    classKeys.forEach(k => {
+      const o = document.createElement('option');
+      o.value = 'class:' + k; o.textContent = k;
+      if ('class:' + k === current) o.selected = true;
+      og.appendChild(o);
+    });
+    sel.appendChild(og);
+  }
+  // 套用已儲存的排序設定
+  const _s4 = state.config.step4 || {};
+  if (_s4.sortProp) sel.value = _s4.sortProp;
+  if (_s4.sortDir) document.getElementById('sort-dir').value = _s4.sortDir;
 }
 
 // ── Alert helpers ────────────────────────────────────────
@@ -422,46 +585,100 @@ async function fetchNotionData() {
     const { coursesDb, classesDb, classRelation } = state.config;
 
     // 發送一次請求，帶兩個資料庫 ID，Make.com 回傳所有資料
-    // 再用每頁的 parent.database_id 分拆課程 / 班別
-    const allPages = await queryAll(coursesDb, classesDb);
-    const coursesRaw = allPages.filter(p => matchDb(p, coursesDb));
-    const classesRaw = allPages.filter(p => matchDb(p, classesDb));
+    // queryAllRaw 按 item key（coursesDb / classesDb）分拆
+    const { courses: coursesRaw, classes: classesRaw } = await queryAllRaw(coursesDb, classesDb);
 
-    // 如果分拆後課程為 0，試退回只用第一個資料庫 ID 的方式
-    // （兼容 Make.com 只配置單一資料庫的情況）
-    if (coursesRaw.length === 0 && classesRaw.length === 0 && allPages.length > 0) {
-      showError('⚠ 無法分拆資料，請確認 Make.com scenario 有查詢兩個資料庫');
+    if (coursesRaw.length === 0) {
+      showError('⚠ Make.com scenario 尚未回傳課程資料。請在 Make.com 中新增查詢課程資料庫的步驟，並以 coursesDb 為 key 輸出。');
     }
 
-    // 用班別的 Relation 欄位分組（班別 → 課程）
-    const classesByCourse = new Map();
+    // ── 以 Class 為主導建立資料（確保所有班別都被納入）────
+    const stripId = id => (id || '').replace(/-/g, '');
+
+    // 建立課程查找表（by stripped ID）
+    const courseById = new Map();
+    for (const course of coursesRaw) {
+      courseById.set(stripId(course.id), course);
+    }
+
+    // 按班別的 Relation 欄位分組：classesDb → [cls, ...]
+    const classesByCourseId = new Map(); // courseId → cls[]
+    const orphanClasses = [];            // 沒有配對到課程的班別
     for (const cls of classesRaw) {
-      // 兼容 Array（Make.com）及 Object（標準 Notion）格式
       const properties = cls.properties;
       const relProp = Array.isArray(properties)
         ? properties.find(p => p.label === classRelation)
         : properties?.[classRelation];
-      const courseIds = relProp?.relation?.map(r => r.id) || [];
-      for (const cid of courseIds) {
-        if (!classesByCourse.has(cid)) classesByCourse.set(cid, []);
-        classesByCourse.get(cid).push(cls);
+      const courseIds = relProp?.relation?.map(r => stripId(r.id)) || [];
+      if (courseIds.length > 0) {
+        for (const cid of courseIds) {
+          if (!classesByCourseId.has(cid)) classesByCourseId.set(cid, []);
+          classesByCourseId.get(cid).push(cls);
+        }
+      } else {
+        orphanClasses.push(cls); // 沒有 Relation 的班別仍然保留
       }
     }
 
-    // 每個 Notion page 的所有欄位值提取為 props 字典
-    state.courses = coursesRaw.map(course => ({
-      courseId: course.id,
-      title:    getTitle(course),
-      props:    extractAllProps(course),
-      classes:  (classesByCourse.get(course.id) || []).map(cls => ({
-        classId: cls.id,
-        props:   extractAllProps(cls),
-      })),
-    }));
+    // 按課程在 coursesRaw 中的原始次序排列
+    const courseOrder = new Map(coursesRaw.map((c, i) => [stripId(c.id), i]));
+    const sortedEntries = [...classesByCourseId.entries()].sort((a, b) => {
+      return (courseOrder.get(a[0]) ?? 9999) - (courseOrder.get(b[0]) ?? 9999);
+    });
+
+    state.courses = sortedEntries.map(([cid, classes]) => {
+      const courseRaw = courseById.get(cid);
+      return {
+        courseId: courseRaw ? courseRaw.id : ('nocourse-' + cid),
+        title:    courseRaw ? getTitle(courseRaw) : '(未知課程)',
+        props:    courseRaw ? extractAllProps(courseRaw) : {},
+        classes:  classes.map(cls => ({ classId: cls.id, props: extractAllProps(cls) })),
+      };
+    });
+
+    // 沒有配對課程的班別，放在最後獨立一組
+    if (orphanClasses.length) {
+      state.courses.push({
+        courseId: 'nocourse-standalone',
+        title:    '(未連結課程的班別)',
+        props:    {},
+        classes:  orphanClasses.map(cls => ({ classId: cls.id, props: extractAllProps(cls) })),
+      });
+    }
+
+    // ── 收集 debug mapping 資料 ──────────────────────────
+    state._debug = state._debug || {};
+    state._debug.classRelationField = classRelation;
+    state._debug.coursesRaw = coursesRaw.map(c => ({ id: c.id, title: getTitle(c) }));
+    state._debug.classesRaw = classesRaw.map(cls => {
+      const properties = cls.properties;
+      const relProp = Array.isArray(properties)
+        ? properties.find(p => p.label === classRelation)
+        : properties?.[classRelation];
+      const stripId = id => (id || '').replace(/-/g, '');
+      const courseIds = relProp?.relation?.map(r => stripId(r.id)) || [];
+      const codeKey = Object.keys(cls.properties || {}).find(k => k === '編號') || '編號';
+      const codeProp = (cls.properties || {})[codeKey];
+      const code = codeProp?.number ?? codeProp?.rich_text?.map(t=>t.plain_text).join('') ?? '?';
+      return { id: cls.id.slice(0,8), code, courseIds, matched: courseIds.some(cid => courseById.has(cid)) };
+    });
+    state._debug.orphanCount = orphanClasses.length;
+    state._debug.finalCourseCount = state.courses.length;
+    state._debug.finalClassCount = state.courses.reduce((n, c) => n + c.classes.length, 0);
+    document.getElementById('btn-debug').style.display = '';
 
     renderPreview(state.courses);
     document.getElementById('btn-to-step3').disabled = false;
     showSuccess(`成功獲取 ${state.courses.length} 個課程`);
+
+    // 儲存快取到 clientStorage
+    const savedAt = Date.now();
+    parent.postMessage({ pluginMessage: {
+      type: 'save-notion-data',
+      courses: state.courses,
+      savedAt,
+    }}, '*');
+    showCacheBar(savedAt, state.courses.length);
 
   } catch (err) {
     showError('Notion API 錯誤：' + err.message);
@@ -471,25 +688,54 @@ async function fetchNotionData() {
   }
 }
 
+// ── 快取相關 ─────────────────────────────────────────────
+function showCacheBar(savedAt, count) {
+  const d   = new Date(savedAt);
+  const pad = n => String(n).padStart(2, '0');
+  const str = `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}  ·  ${count} 個課程`;
+  document.getElementById('cache-time').textContent = str;
+  document.getElementById('cache-bar').style.display = 'block';
+}
+
+function useCachedData() {
+  if (!state._cachedCourses) return;
+  state.courses = state._cachedCourses;
+  renderPreview(state.courses);
+  document.getElementById('btn-to-step3').disabled = false;
+  showSuccess(`已載入快取資料（${state.courses.length} 個課程）`);
+}
+
+function clearCache() {
+  state._cachedCourses = null;
+  document.getElementById('cache-bar').style.display = 'none';
+  parent.postMessage({ pluginMessage: { type: 'clear-notion-data' } }, '*');
+}
+
 // ── 提取單個 Notion property 的值 ───────────────────────
 function extractPropValue(prop) {
   switch (prop.type) {
     case 'title':
       return (prop.title || []).map(t => t.plain_text).join('');
     case 'rich_text':
-      return (prop.rich_text || []).map(t => t.plain_text).join('');
+      return formatScheduleString((prop.rich_text || []).map(t => t.plain_text).join(''));
     case 'select':
       return prop.select ? prop.select.name : '';
     case 'multi_select':
-      return (prop.multi_select || []).map(s => s.name).join('、');
+      return formatScheduleString((prop.multi_select || []).map(s => s.name).join('、'));
     case 'number':
       return prop.number != null ? String(prop.number) : '';
     case 'date':
       return prop.date ? prop.date.start : '';
     case 'checkbox':
       return prop.checkbox === true; // boolean 供 code.js 控制 show/hide
+    case 'formula':
+      // 支援 formula 回傳 boolean（供 show/hide 用，例如「顯示備註」）
+      if (prop.formula?.type === 'boolean') return prop.formula.boolean === true;
+      if (prop.formula?.type === 'string')  return formatScheduleString(prop.formula.string ?? '');
+      if (prop.formula?.type === 'number')  return prop.formula.number != null ? String(prop.formula.number) : '';
+      return null;
     default:
-      return null; // 略過 relation、rollup、formula 等
+      return null; // 略過 relation、rollup 等
   }
 }
 
@@ -541,9 +787,9 @@ function matchDb(page, dbId) {
 }
 
 // ── Notion: 查詢（Make.com Webhook 回應格式）──────────
-// 回應格式：[{ body: "IMTString(N): [{raw: '...'}, ...]", status: 200, headers: [] }]
+// 實際格式：[{ "json": "[{\"classesDb\":\"...\"}, {\"coursesDb\":\"...\"}]" }]
 // 支援傳入兩個資料庫 ID（合併一次請求），或單一 database_id（向後兼容）
-async function queryAll(coursesDbId, classesDbId) {
+async function queryAllRaw(coursesDbId, classesDbId) {
   const body = classesDbId
     ? { courses_db: coursesDbId, classes_db: classesDbId }
     : { database_id: coursesDbId };
@@ -559,19 +805,69 @@ async function queryAll(coursesDbId, classesDbId) {
   }
   const data = await res.json();
 
-  // Make.com 格式：[{ body: "IMTString(N): [...]", status: 200, headers: [] }]
+  // ✅ FIXED v3 格式：[{ "json": "[{classesDb:..., coursesJson:...}, ...]" }, ...]
+  // Make.com 可能回傳多個 bundle（data[0], data[1]...），每個都需要解析
+  if (Array.isArray(data) && data.some(d => d?.json)) {
+    const courses = [], classes = [];
+    let coursesFound = false;
+    const bundleLog = [];
+
+    for (let bi = 0; bi < data.length; bi++) {
+      const dataItem = data[bi];
+      if (!dataItem?.json) { bundleLog.push(`bundle[${bi}]: no .json`); continue; }
+      const inner = JSON.parse(dataItem.json);
+      const classesInBundle = [];
+
+      for (const item of inner) {
+        // 解析 class page
+        if (item.classesDb) {
+          const page = typeof item.classesDb === 'string' ? JSON.parse(item.classesDb) : item.classesDb;
+          if (!page.in_trash) { classes.push(page); classesInBundle.push(page.id); }
+        }
+      }
+
+      // courses JSON 藏喺某個 bundle 第一個 item 的 coursesJson 欄位（只讀取一次）
+      let coursesInBundle = 0;
+      if (!coursesFound) {
+        const coursesJsonStr = inner[0]?.coursesJson;
+        if (coursesJsonStr) {
+          coursesFound = true;
+          const coursesInner = JSON.parse(coursesJsonStr);
+          for (const item of coursesInner) {
+            const pageStr = item.coursesDb ?? item.raw;
+            const page = typeof pageStr === 'string' ? JSON.parse(pageStr) : pageStr;
+            if (!page.in_trash) { courses.push(page); coursesInBundle++; }
+          }
+        }
+      }
+      bundleLog.push(`bundle[${bi}]: ${classesInBundle.length} class(es)${coursesInBundle ? `, ${coursesInBundle} course(s) (coursesJson)` : ''} — IDs: ${classesInBundle.map(id => id.slice(0,8)).join(', ') || '—'}`);
+    }
+
+    // 存到 state._debug 供顯示
+    state._debug = state._debug || {};
+    state._debug.format = 'v3 (json bundles)';
+    state._debug.totalBundles = data.length;
+    state._debug.bundleLog = bundleLog;
+    state._debug.rawClassCount = classes.length;
+    state._debug.rawCourseCount = courses.length;
+
+    return { courses, classes };
+  }
+
+  // 備用：舊 IMTString 格式 [{ body: "IMTString(N): [...]" }]
   if (Array.isArray(data) && data[0]?.body) {
     const bodyStr = data[0].body;
     const jsonStart = bodyStr.indexOf('[');
     if (jsonStart === -1) throw new Error('無法解析 Make.com 回應格式');
-    const rawArray = JSON.parse(bodyStr.slice(jsonStart));
-    return rawArray
+    const allPages = JSON.parse(bodyStr.slice(jsonStart))
       .map(item => (typeof item.raw === 'string' ? JSON.parse(item.raw) : item))
       .filter(page => !page.in_trash);
+    return { courses: [], classes: allPages };
   }
 
   // 備用：標準 Notion API 格式
-  return data.results || [];
+  const allPages = data.results || [];
+  return { courses: allPages.filter(p => matchDb(p, coursesDbId)), classes: allPages.filter(p => matchDb(p, classesDbId)) };
 }
 
 // ── Render preview list ──────────────────────────────────
@@ -609,6 +905,15 @@ function renderCompBox(role, data) {
   // 快取掃描結果供 rename 後重繪
   if (role === 'course') { state.courseCompData = data; state.courseCompId = data.componentId; }
   else                   { state.classCompData  = data; state.classCompId  = data.componentId; }
+
+  // 儲存組件資料到 clientStorage
+  parent.postMessage({ pluginMessage: {
+    type: 'save-comp-data',
+    data: {
+      courseComp: state.courseCompData || null,
+      classComp:  state.classCompData  || null,
+    }
+  }}, '*');
 
   box.className = 'comp-box scanned';
   const warnContainer = (role === 'course' && !data.hasContainer)
@@ -691,7 +996,166 @@ function getNotionFields(role) {
   return classes.length ? Object.keys(classes[0].props || {}) : [];
 }
 
+// ── 格式化時間表字串：每個星期幾各佔一行 ─────────────────
+// 支援縮寫格式：「星期一、三、五 9:00-10:00」→ 每日一行
+// 支援完整格式：「星期一 9:00、星期三 9:00」→ 每日一行
+function formatScheduleString(str) {
+  if (!str) return str;
+  str = String(str).trim();
+
+  // 只處理以星期/週開頭的字串（避免誤改課程描述）
+  if (!/^[星週]期?[一二三四五六日天]/.test(str)) return str;
+
+  // 情況一：縮寫格式 → 「星期一、三、五 9:00-10:00」
+  // 第一個星期是完整寫法，其後是縮寫（如 、三、五）
+  const abbrevMatch = str.match(/^([星週]期?)([一二三四五六日天])((?:\s*[、，,及和]\s*[一二三四五六日天])+)([\s\S]*)$/);
+  if (abbrevMatch) {
+    const prefix    = abbrevMatch[1]; // 「星期」或「週」
+    const firstDay  = abbrevMatch[2];
+    const restDays  = abbrevMatch[3].match(/[一二三四五六日天]/g) || [];
+    const timeSuffix = abbrevMatch[4].trim();
+    const days = [firstDay, ...restDays];
+    return days.map(d => prefix + d + (timeSuffix ? ' ' + timeSuffix : '')).join('\n');
+  }
+
+  // 情況二：多個完整星期 → 「星期一 9:00、星期三 9:00」
+  const fullDayMatches = str.match(/[星週]期?[一二三四五六日天]/g);
+  if (fullDayMatches && fullDayMatches.length > 1) {
+    const parts = str.split(/(?=[星週]期?[一二三四五六日天])/);
+    return parts
+      .map(p => p.replace(/^[、，,\s]+/, '').replace(/[、，,\s]+$/, ''))
+      .filter(p => p)
+      .join('\n');
+  }
+
+  return str;
+}
+
+// ── 從時間字串提取星期，統一回傳「星期X」格式 ────────────
+// 支援：「星期二」「週三」「星期三 9:00」→「星期X」
+//        「二」「四」（multi_select 單字）→「星期X」
+function extractWeekDay(str) {
+  if (!str) return '';
+  str = String(str).trim();
+  // 完整格式：星期X / 週X（X = 一二三四五六日天）
+  const full = str.match(/[星週]期?([一二三四五六日天])/);
+  if (full) return '星期' + full[1];
+  // 單字格式：整個字串就是一個星期字符（multi_select 的值）
+  const single = str.match(/^([一二三四五六日天])$/);
+  if (single) return '星期' + single[1];
+  return '';
+}
+
+// ── 從編號字串提取數字 ────────────────────────────────────
+function extractCodeNum(str) {
+  const m = String(str || '').match(/\d+/);
+  return m ? parseInt(m[0], 10) : NaN;
+}
+
+// ── 按編號 + 星期重新分組 ─────────────────────────────────
+// 邏輯（全域）：
+//   1. 所有班別按編號全域排序（跨所有課程）
+//   2. 依次掃描：同課程 + 同星期 → 合併入同一課程卡
+//      課程不同 OR 星期不同 → 新課程卡
+// 結果：_weekGroup 供 code.js 按星期分行排列卡片
+function regroupByCodeAndWeek(courses, codeField, weekField) {
+  // 展平全部班別
+  const flat = [];
+  for (const course of courses) {
+    for (const cls of (course.classes || [])) {
+      flat.push({ cls, course });
+    }
+  }
+
+  // 全域按班別編號排序
+  const codeKey = codeField.startsWith('course:') ? codeField.slice(7) : codeField;
+  flat.sort((a, b) => {
+    const na = extractCodeNum(a.cls.props[codeKey]);
+    const nb = extractCodeNum(b.cls.props[codeKey]);
+    if (isNaN(na) && isNaN(nb)) return 0;
+    if (isNaN(na)) return 1;
+    if (isNaN(nb)) return -1;
+    return na - nb;
+  });
+
+  // 分組：同課程 + 同星期 → 同一張卡
+  const weekIsCourse = weekField.startsWith('course:');
+  const weekKey      = weekIsCourse ? weekField.slice(7) : weekField;
+
+  const groups = [];
+  let cur = null;
+
+  for (const { cls, course } of flat) {
+    const rawWeek = weekIsCourse
+      ? (course.props[weekKey] || '')
+      : (cls.props[weekField]  || '');
+    const week = extractWeekDay(rawWeek);
+
+    // 合併條件：緊接的上一個班別屬同一課程 + 同一星期
+    const sameGroup = cur &&
+      course.courseId === cur.course.courseId &&
+      week === cur.week;
+
+    if (sameGroup) {
+      cur.classes.push(cls);
+    } else {
+      cur = { course, classes: [cls], week };
+      groups.push(cur);
+    }
+  }
+
+  return groups.map(g => ({
+    courseId:   'grp_' + g.classes[0].classId,
+    title:      g.course.title,
+    props:      g.course.props,
+    classes:    g.classes,
+    _weekGroup: g.week,
+  }));
+}
+
 // ── Step 4: Start sync ───────────────────────────────────
+function showDebug() {
+  const d = state._debug;
+  if (!d) { alert('尚無 debug 資料，請先獲取 Notion 資料'); return; }
+  const lines = [];
+  lines.push('═══ Make.com 回應 ═══');
+  lines.push(`格式：${d.format || '未知'}`);
+  lines.push(`Bundles 數量：${d.totalBundles ?? '?'}`);
+  if (d.bundleLog) d.bundleLog.forEach(l => lines.push('  ' + l));
+  lines.push('');
+  lines.push('═══ 原始資料 ═══');
+  lines.push(`coursesRaw：${d.rawCourseCount ?? d.coursesRaw?.length ?? '?'} 筆`);
+  if (d.coursesRaw) d.coursesRaw.forEach(c => lines.push(`  [${c.id.slice(0,8)}] ${c.title}`));
+  lines.push(`classesRaw：${d.rawClassCount ?? d.classesRaw?.length ?? '?'} 筆`);
+  lines.push('');
+  lines.push('═══ Relation 配對（classRelation 欄位：' + (d.classRelationField || '?') + '）═══');
+  if (d.classesRaw) {
+    const matched = d.classesRaw.filter(c => c.matched);
+    const unmatched = d.classesRaw.filter(c => !c.matched);
+    lines.push(`✅ 成功配對：${matched.length} 班`);
+    matched.forEach(c => lines.push(`  code=${c.code}  id=${c.id}  → courseId=${c.courseIds[0]?.slice(0,8) ?? '?'}`));
+    lines.push(`❌ 未能配對（orphan）：${unmatched.length} 班`);
+    unmatched.forEach(c => lines.push(`  code=${c.code}  id=${c.id}  courseIds=[${c.courseIds.join(', ')}]`));
+  }
+  lines.push('');
+  lines.push('═══ 最終結果 ═══');
+  lines.push(`課程卡數：${d.finalCourseCount ?? '?'}`);
+  lines.push(`班別總數：${d.finalClassCount ?? '?'}`);
+  lines.push(`Orphan 班別：${d.orphanCount ?? '?'}`);
+
+  document.getElementById('debug-content').textContent = lines.join('\n');
+  document.getElementById('debug-modal').style.display = '';
+}
+
+function stopSync() {
+  parent.postMessage({ pluginMessage: { type: 'stop-sync' } }, '*');
+  document.getElementById('btn-stop-sync').style.display = 'none';
+  document.getElementById('btn-sync').disabled = false;
+  document.getElementById('btn-back-3').disabled = false;
+  setProgress(null, '已停止');
+  log('⏹ 同步已停止', 'log-info');
+}
+
 async function startSync() {
   clearAlerts();
   if (!state.courses?.length) return showError('尚無課程資料，請先執行步驟 2');
@@ -702,11 +1166,71 @@ async function startSync() {
   const modeD = document.getElementById('mode-d').checked;
   if (!modeA && !modeD) return showError('請至少選擇一種同步模式');
 
+  // 儲存 Step 4 設定
+  const groupByCode = document.getElementById('group-by-code').checked;
+  state.config.step4 = {
+    modeA,
+    modeD,
+    groupByCode,
+    groupCodeField: document.getElementById('group-code-field').value,
+    groupWeekField: document.getElementById('group-week-field').value,
+    sortProp:       document.getElementById('sort-prop').value,
+    sortDir:        document.getElementById('sort-dir').value,
+  };
+  parent.postMessage({ pluginMessage: { type: 'save-config', config: state.config } }, '*');
+
+  // 按編號 + 星期重新分組（優先於排序）
+  if (groupByCode) {
+    const codeField = document.getElementById('group-code-field').value || '編號';
+    const weekField = document.getElementById('group-week-field').value || '';
+    state.courses = regroupByCodeAndWeek(state.courses, codeField, weekField);
+
+    // 按星期→編號排序，確保卡片在 Figma 畫布正確換行
+    const WEEK_ORDER = {
+      '星期一':0,'週一':0,'星期二':1,'週二':1,'星期三':2,'週三':2,
+      '星期四':3,'週四':3,'星期五':4,'週五':4,'星期六':5,'週六':5,
+      '星期日':6,'週日':6,'星期天':6,'週天':6,
+    };
+    state.courses.sort((a, b) => {
+      const oa = WEEK_ORDER[a._weekGroup] ?? 99;
+      const ob = WEEK_ORDER[b._weekGroup] ?? 99;
+      if (oa !== ob) return oa - ob;
+      // 同星期：按第一個班別的編號排序（codeField 不含 course: 前綴）
+      const codeKey = codeField.startsWith('course:') ? codeField.slice(7) : codeField;
+      const ca = extractCodeNum((a.classes[0]?.props || {})[codeKey]);
+      const cb = extractCodeNum((b.classes[0]?.props || {})[codeKey]);
+      return (isNaN(ca) ? 9999 : ca) - (isNaN(cb) ? 9999 : cb);
+    });
+  } else {
+    // 一般排序
+    const sortProp = document.getElementById('sort-prop').value;
+    const sortDir  = document.getElementById('sort-dir').value;
+    if (sortProp) {
+      const [scope, field] = sortProp.includes(':') ? sortProp.split(':') : ['course', sortProp];
+      state.courses.sort((a, b) => {
+        // class 欄位：用該課程所有班別中的最小值排序
+        const minClassVal = (course) => {
+          const vals = (course.classes || [])
+            .map(c => (c.props || {})[field] ?? '')
+            .map(v => { const n = extractCodeNum(v); return isNaN(n) ? v : n; });
+          if (!vals.length) return Infinity;
+          return typeof vals[0] === 'number' ? Math.min(...vals) : vals.sort()[0];
+        };
+        const av = scope === 'class' ? minClassVal(a) : ((a.props || {})[field] ?? '');
+        const bv = scope === 'class' ? minClassVal(b) : ((b.props || {})[field] ?? '');
+        const an = parseFloat(av), bn = parseFloat(bv);
+        const cmp = (!isNaN(an) && !isNaN(bn)) ? an - bn : String(av).localeCompare(String(bv), 'zh-HK');
+        return sortDir === 'desc' ? -cmp : cmp;
+      });
+    }
+  }
+
   document.getElementById('sync-log').innerHTML = '';
   document.getElementById('sync-log').style.display = 'none';
   document.getElementById('progress-section').style.display = 'block';
   document.getElementById('btn-sync').disabled = true;
   document.getElementById('btn-back-3').disabled = true;
+  document.getElementById('btn-stop-sync').style.display = '';
   setProgress(0, '準備中...');
 
   const syncConfig = {
@@ -728,7 +1252,7 @@ async function startSync() {
 
 // ── Progress ──────────────────────────────────────────────
 function setProgress(pct, label) {
-  document.getElementById('progress-fill').style.width = pct + '%';
+  if (pct != null) document.getElementById('progress-fill').style.width = pct + '%';
   document.getElementById('progress-label').textContent = label;
 }
 
@@ -740,6 +1264,14 @@ window.onmessage = (e) => {
   switch (msg.type) {
     case 'saved-config':
       applyLoadedConfig(msg.config);
+      // 如有 Notion 快取，顯示快取提示欄
+      if (msg.notionCache?.courses?.length) {
+        state._cachedCourses = msg.notionCache.courses;
+        showCacheBar(msg.notionCache.savedAt, msg.notionCache.courses.length);
+      }
+      // 如有組件快取，自動還原 Step 3 掃描結果
+      if (msg.compCache?.courseComp) renderCompBox('course', msg.compCache.courseComp);
+      if (msg.compCache?.classComp)  renderCompBox('class',  msg.compCache.classComp);
       break;
 
     case 'config-saved':
@@ -772,6 +1304,7 @@ window.onmessage = (e) => {
       setProgress(100, `完成！新增 ${msg.created} 張，更新 ${msg.updated} 張`);
       log(`✅ 方案 A 完成 — 新增 ${msg.created}，更新 ${msg.updated}`, 'log-ok');
       showSuccess(`同步完成！新增 ${msg.created} 張課程卡，更新 ${msg.updated} 張`);
+      document.getElementById('btn-stop-sync').style.display = 'none';
 
       if (document.getElementById('mode-d').checked) {
         log('啟動方案 D：建立 Figma Variables...', 'log-info');
@@ -783,8 +1316,17 @@ window.onmessage = (e) => {
       break;
     }
 
+    case 'sync-stopped':
+      setProgress(null, `已停止（已完成 ${msg.created + msg.updated} 張）`);
+      log(`⏹ 同步已停止 — 新增 ${msg.created}，更新 ${msg.updated}`, 'log-info');
+      document.getElementById('btn-stop-sync').style.display = 'none';
+      document.getElementById('btn-sync').disabled = false;
+      document.getElementById('btn-back-3').disabled = false;
+      break;
+
     case 'variables-done':
       log(`✅ 方案 D 完成 — ${msg.message}`, 'log-ok');
+      document.getElementById('btn-stop-sync').style.display = 'none';
       document.getElementById('btn-sync').disabled = false;
       document.getElementById('btn-back-3').disabled = false;
       break;
@@ -792,6 +1334,7 @@ window.onmessage = (e) => {
     case 'error':
       showError(msg.message);
       log('❌ ' + msg.message, 'log-err');
+      document.getElementById('btn-stop-sync').style.display = 'none';
       document.getElementById('btn-sync').disabled = false;
       document.getElementById('btn-back-3').disabled = false;
       break;
@@ -806,6 +1349,17 @@ function applyLoadedConfig(cfg) {
   if (cfg.coursesDb)     document.getElementById('courses-db').value       = cfg.coursesDb;
   if (cfg.classesDb)     document.getElementById('classes-db').value       = cfg.classesDb;
   if (cfg.classRelation) document.getElementById('f-class-relation').value = cfg.classRelation;
+
+  // 還原 Step 4 設定（checkboxes 可即時還原；dropdowns 在 populateGroupFieldOptions 後才生效）
+  const s4 = cfg.step4;
+  if (s4) {
+    if (s4.modeA       != null) document.getElementById('mode-a').checked        = s4.modeA;
+    if (s4.modeD       != null) document.getElementById('mode-d').checked        = s4.modeD;
+    if (s4.groupByCode != null) {
+      document.getElementById('group-by-code').checked = s4.groupByCode;
+      toggleGroupOptions();
+    }
+  }
 }
 </script>
 </body>

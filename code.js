@@ -6,11 +6,16 @@
 
 figma.showUI(__html__, { width: 440, height: 620, title: '暑期班課程卡生成器' });
 
-// ── 初始化：載入 clientStorage 已儲存的設定 ──────────────────
+// ── 初始化：載入 clientStorage 已儲存的設定、Notion 快取及組件快取 ──
 (async () => {
-  const config = (await figma.clientStorage.getAsync('plugin_config')) || {};
-  figma.ui.postMessage({ type: 'saved-config', config });
+  const config      = (await figma.clientStorage.getAsync('plugin_config'))    || {};
+  const notionCache = (await figma.clientStorage.getAsync('notion_data_cache')) || null;
+  const compCache   = (await figma.clientStorage.getAsync('comp_data_cache'))   || null;
+  figma.ui.postMessage({ type: 'saved-config', config, notionCache, compCache });
 })();
+
+// ── 停止同步旗標 ─────────────────────────────────────────────
+let _stopSync = false;
 
 // ── 主訊息處理器 ─────────────────────────────────────────────
 figma.ui.onmessage = async (msg) => {
@@ -21,11 +26,31 @@ figma.ui.onmessage = async (msg) => {
         figma.ui.postMessage({ type: 'config-saved' });
         break;
 
+      case 'save-notion-data':
+        await figma.clientStorage.setAsync('notion_data_cache', {
+          courses: msg.courses,
+          savedAt: msg.savedAt,
+        });
+        break;
+
+      case 'clear-notion-data':
+        await figma.clientStorage.deleteAsync('notion_data_cache');
+        break;
+
+      case 'save-comp-data':
+        await figma.clientStorage.setAsync('comp_data_cache', msg.data);
+        break;
+
       case 'scan-component':
         handleScanComponent(msg.role);
         break;
 
+      case 'stop-sync':
+        _stopSync = true;
+        break;
+
       case 'sync-cards':
+        _stopSync = false;
         await handleSync(msg.courses, msg.config);
         break;
 
@@ -57,11 +82,43 @@ function handleScanComponent(role) {
       message: '請先在 Figma 畫布上選取一個 Component（組件）'
     });
   }
-  const node = sel[0];
-  if (node.type !== 'COMPONENT' && node.type !== 'COMPONENT_SET') {
+  let node = sel[0];
+
+  // 若選取的係子節點（如 TEXT），向上尋找最近的 COMPONENT / INSTANCE / FRAME
+  if (node.type !== 'COMPONENT' && node.type !== 'INSTANCE' && node.type !== 'COMPONENT_SET' && node.type !== 'FRAME') {
+    let parent = node.parent;
+    while (parent && parent.type !== 'PAGE') {
+      if (parent.type === 'COMPONENT' || parent.type === 'INSTANCE' || parent.type === 'COMPONENT_SET' || parent.type === 'FRAME') {
+        node = parent;
+        break;
+      }
+      parent = parent.parent;
+    }
+  }
+
+  // 若選取的係 Instance，自動切換到 main component
+  if (node.type === 'INSTANCE') {
+    const main = node.mainComponent;
+    if (!main) {
+      return figma.ui.postMessage({
+        type: 'error',
+        message: '無法取得此 Instance 的 Main Component，請直接選取 COMPONENT 節點'
+      });
+    }
+    node = main;
+  }
+
+  // COMPONENT_SET：取第一個子 COMPONENT（variant）
+  if (node.type === 'COMPONENT_SET') {
+    const first = node.children.find(function(c) { return c.type === 'COMPONENT'; });
+    if (first) node = first;
+  }
+
+  // 接受 COMPONENT 或 FRAME（例如已 detach 的 frame 亦可掃描）
+  if (node.type !== 'COMPONENT' && node.type !== 'FRAME') {
     return figma.ui.postMessage({
       type: 'error',
-      message: '選取的節點類型為「' + node.type + '」，請選取 COMPONENT 類型的節點'
+      message: '請選取 Component 或其 Instance（目前選取：' + node.type + '）'
     });
   }
 
@@ -119,11 +176,24 @@ async function handleSync(courses, config) {
   const classLayers  = getHashLayers(classComp);
 
   let created = 0, updated = 0;
-  let nextX = computeNextX();
+  const CARD_GAP    = 48;
+  const ROW_GAP     = 200;
   const PLACEMENT_Y = 200;
-  const CARD_GAP = 48;
+
+  // ── 判斷是否啟用按星期分行排列（排序已在 ui.html 完成）────
+  var hasWeekGroups = courses.some(function(c) { return !!c._weekGroup; });
+
+  var startX    = 120;
+  var nextX     = hasWeekGroups ? startX : computeNextX();
+  var currentY  = PLACEMENT_Y;
+  var curWeek   = null;
+  var rowHeight = 0;
 
   for (let i = 0; i < courses.length; i++) {
+    if (_stopSync) {
+      figma.ui.postMessage({ type: 'sync-stopped', created, updated });
+      return;
+    }
     const course = courses[i];
 
     figma.ui.postMessage({
@@ -133,18 +203,48 @@ async function handleSync(courses, config) {
       message: course.title || ('課程 ' + (i + 1))
     });
 
-    let inst = findByPluginData('notion_course_id', course.courseId);
+    // ── 按星期換行：遇到新星期就另起一行 ──────────────────
+    if (hasWeekGroups && course._weekGroup !== curWeek) {
+      if (curWeek !== null) {
+        currentY += rowHeight + ROW_GAP;
+        rowHeight = 0;
+      }
+      curWeek = course._weekGroup;
+      nextX = startX;
+    }
 
-    if (inst) {
+    // 保留 instance（不 detach），讓用戶可整體編輯 master component
+    const existing = findByPluginData('notion_course_id', course.courseId);
+    var inst;
+    if (existing) {
+      // 原地更新：保留 instance，只更新 overrides
+      inst = existing;
       updated++;
+      if (hasWeekGroups) {
+        inst.x = nextX;
+        inst.y = currentY;
+      }
     } else {
+      // 新建 instance（不 detach）
       inst = courseComp.createInstance();
       inst.setPluginData('notion_course_id', course.courseId);
-      inst.x = nextX;
-      inst.y = PLACEMENT_Y;
+      if (hasWeekGroups) {
+        inst.x = nextX;
+        inst.y = currentY;
+      } else {
+        inst.x = nextX;
+        inst.y = PLACEMENT_Y;
+      }
       figma.currentPage.appendChild(inst);
-      nextX += inst.width + CARD_GAP;
       created++;
+    }
+
+    // 更新下一張卡的 X 及目前行高
+    if (hasWeekGroups) {
+      nextX += inst.width + CARD_GAP;
+      if (inst.height > rowHeight) rowHeight = inst.height;
+    } else if (!existing) {
+      nextX += inst.width + CARD_GAP;
     }
 
     // 圖層名 #X → boolean: show/hide；其餘: 填文字（TEXT 圖層）
@@ -152,10 +252,15 @@ async function handleSync(courses, config) {
       var layerName = courseLayers[li];
       var propName  = layerName.slice(1);
       var value     = course.props && course.props[propName] != null ? course.props[propName] : '';
-      if (typeof value === 'boolean') {
-        setVisible(inst, layerName, value);
+      var boolVal   = toBooleanIfBool(value);
+      if (boolVal !== null) {
+        // Boolean 欄位：直接 show/hide
+        setVisible(inst, layerName, boolVal);
       } else {
         await setText(inst, layerName, value);
+        // 非 TEXT 圖層（Frame/Group）：有值則顯示，無值則隱藏
+        var txtNode = inst.findOne(function(n) { return n.name === layerName && n.type === 'TEXT'; });
+        if (!txtNode) setVisible(inst, layerName, !!value);
       }
     }
 
@@ -176,9 +281,12 @@ async function syncClassCards(courseInst, classes, classComp, classLayers) {
     console.warn('[syncClassCards] 課程組件缺少 ClassesContainer 節點');
     return;
   }
+  // workContainer 預設直接用 container；若 appendChild 失敗（instance 內部限制），才 detach
+  var workContainer = container;
+  var workInst = courseInst;
 
   const existing = new Map();
-  for (const child of [...container.children]) {
+  for (const child of [...workContainer.children]) {
     const id = child.getPluginData('notion_class_id');
     if (id) existing.set(id, child);
   }
@@ -196,7 +304,23 @@ async function syncClassCards(courseInst, classes, classComp, classLayers) {
     if (!classInst) {
       classInst = classComp.createInstance();
       classInst.setPluginData('notion_class_id', cls.classId);
-      container.appendChild(classInst);
+      try {
+        workContainer.appendChild(classInst);
+      } catch (e) {
+        // instance 內部不可直接 appendChild，先 detach courseInst
+        if (workInst.type === 'INSTANCE') {
+          console.warn('[syncClassCards] instance 限制，改為 detach：', e.message);
+          const savedId = workInst.getPluginData('notion_course_id'); // 先儲存，detach 後舊 ref 失效
+          const detached = workInst.detachInstance();
+          detached.setPluginData('notion_course_id', savedId);
+          workInst = detached;
+          workContainer = detached.findOne(function(n) { return n.name === 'ClassesContainer'; });
+          if (!workContainer) { console.warn('[syncClassCards] ClassesContainer 消失'); return; }
+          workContainer.appendChild(classInst);
+        } else {
+          console.warn('[syncClassCards] 無法 appendChild：', e.message);
+        }
+      }
     }
 
     // 圖層名 #X → boolean: show/hide；其餘: 填文字（TEXT 圖層）
@@ -204,10 +328,14 @@ async function syncClassCards(courseInst, classes, classComp, classLayers) {
       var layerName = classLayers[li];
       var propName  = layerName.slice(1);
       var value     = cls.props && cls.props[propName] != null ? cls.props[propName] : '';
-      if (typeof value === 'boolean') {
-        setVisible(classInst, layerName, value);
+      var boolVal   = toBooleanIfBool(value);
+      if (boolVal !== null) {
+        setVisible(classInst, layerName, boolVal);
       } else {
         await setText(classInst, layerName, value);
+        // 非 TEXT 圖層（Frame/Group）：有值則顯示，無值則隱藏
+        var txtNode = classInst.findOne(function(n) { return n.name === layerName && n.type === 'TEXT'; });
+        if (!txtNode) setVisible(classInst, layerName, !!value);
       }
     }
   }
@@ -233,6 +361,12 @@ async function handleSyncVariables(courses) {
 
   function upsertVar(name, resolvedType, value) {
     let v = varCache.get(name);
+    if (v && v.resolvedType !== resolvedType) {
+      // 類型不符，刪除舊變數再重建
+      v.remove();
+      varCache.delete(name);
+      v = null;
+    }
     if (!v) {
       v = figma.variables.createVariable(name, collection.id, resolvedType);
       varCache.set(name, v);
@@ -248,10 +382,12 @@ async function handleSyncVariables(courses) {
     const props = course.props || {};
 
     for (const propName in props) {
-      const val    = props[propName];
-      const numVal = parseFloat(val);
-      const isNum  = val !== '' && !isNaN(numVal);
-      // '/' 在 Variable 名稱中有特殊意義（分層），欄位名稱內的斜線用底線替代
+      const raw     = props[propName];
+      const boolVal = toBooleanIfBool(raw);
+      // boolean → STRING "是"/"否"
+      const val     = boolVal !== null ? (boolVal ? '是' : '否') : raw;
+      const numVal  = parseFloat(val);
+      const isNum   = val !== '' && !isNaN(numVal);
       const safeKey = propName.replace(/\//g, '_');
       upsertVar(p + '/' + safeKey, isNum ? 'FLOAT' : 'STRING', isNum ? numVal : val);
       totalVars++;
@@ -261,9 +397,11 @@ async function handleSyncVariables(courses) {
       const cp = p + '/class-' + cls.classId.slice(-4);
       const clsProps = cls.props || {};
       for (const propName in clsProps) {
-        const val    = clsProps[propName];
-        const numVal = parseFloat(val);
-        const isNum  = val !== '' && !isNaN(numVal);
+        const raw     = clsProps[propName];
+        const boolVal = toBooleanIfBool(raw);
+        const val     = boolVal !== null ? (boolVal ? '是' : '否') : raw;
+        const numVal  = parseFloat(val);
+        const isNum   = val !== '' && !isNaN(numVal);
         const safeKey = propName.replace(/\//g, '_');
         upsertVar(cp + '/' + safeKey, isNum ? 'FLOAT' : 'STRING', isNum ? numVal : val);
         totalVars++;
@@ -302,6 +440,14 @@ function handleRenameLayer(nodeId, newName, role) {
   }
   node.name = newName;
   figma.ui.postMessage({ type: 'layer-renamed', nodeId, newName, role });
+}
+
+// 判斷值是否 boolean（包括字串 "true"/"false"），是則回傳 boolean，否則回傳 null
+function toBooleanIfBool(value) {
+  if (typeof value === 'boolean') return value;
+  if (value === 'true')  return true;
+  if (value === 'false') return false;
+  return null;
 }
 
 // 控制任意類型圖層（Group、Frame、Component、Text...）的 show/hide
