@@ -131,17 +131,13 @@ function handleScanComponent(role) {
   }
   scan(node, 0);
 
-  const hasContainer = role === 'course'
-    ? !!node.findOne(function(n) { return n.name === 'ClassesContainer'; })
-    : true;
-
   figma.ui.postMessage({
     type: 'component-scanned',
     role,
     componentId: node.id,
     componentName: node.name,
     layers,
-    hasContainer
+    hasContainer: true  // ClassesContainer 不再需要，ClassList 由 plugin 自動建立
   });
 }
 
@@ -160,7 +156,9 @@ function getHashLayers(comp) {
 
 // ================================================================
 // 方案 A：主要同步邏輯
-// 圖層命名規則：#<Notion欄位名稱>  → 自動填入對應欄位值
+// 新架構：每個課程生成一個 CourseGroup Frame，內有：
+//   ├── CourseCard Instance（保持 instance，不 detach）
+//   └── ClassList Frame（plugin 自建，裝 ClassCard instances）
 // ================================================================
 async function handleSync(courses, config) {
   const courseComp = figma.getNodeById(config.courseComponentId);
@@ -171,7 +169,6 @@ async function handleSync(courses, config) {
   if (!classComp || classComp.type !== 'COMPONENT')
     throw new Error('找不到班別卡組件，請重新在步驟 3 掃描');
 
-  // 從組件掃描 # 圖層，直接對應 Notion 欄位名稱
   const courseLayers = getHashLayers(courseComp);
   const classLayers  = getHashLayers(classComp);
 
@@ -179,10 +176,9 @@ async function handleSync(courses, config) {
   const CARD_GAP    = 48;
   const ROW_GAP     = 200;
   const PLACEMENT_Y = 200;
+  const CLASS_GAP   = 0;   // CourseCard 與 ClassList 之間的間距
 
-  // ── 判斷是否啟用按星期分行排列（排序已在 ui.html 完成）────
   var hasWeekGroups = courses.some(function(c) { return !!c._weekGroup; });
-
   var startX    = 120;
   var nextX     = hasWeekGroups ? startX : computeNextX();
   var currentY  = PLACEMENT_Y;
@@ -203,7 +199,7 @@ async function handleSync(courses, config) {
       message: course.title || ('課程 ' + (i + 1))
     });
 
-    // ── 按星期換行：遇到新星期就另起一行 ──────────────────
+    // ── 按星期換行 ──────────────────────────────────────────
     if (hasWeekGroups && course._weekGroup !== curWeek) {
       if (curWeek !== null) {
         currentY += rowHeight + ROW_GAP;
@@ -213,59 +209,87 @@ async function handleSync(courses, config) {
       nextX = startX;
     }
 
-    // 保留 instance（不 detach），讓用戶可整體編輯 master component
-    const existing = findByPluginData('notion_course_id', course.courseId);
-    var inst;
-    if (existing) {
-      // 原地更新：保留 instance，只更新 overrides
-      inst = existing;
+    // ── 找或建 CourseGroup Frame ────────────────────────────
+    var group = findByPluginData('notion_course_id', course.courseId);
+    if (group) {
       updated++;
-      if (hasWeekGroups) {
-        inst.x = nextX;
-        inst.y = currentY;
-      }
+      if (hasWeekGroups) { group.x = nextX; group.y = currentY; }
     } else {
-      // 新建 instance（不 detach）
-      inst = courseComp.createInstance();
-      inst.setPluginData('notion_course_id', course.courseId);
-      if (hasWeekGroups) {
-        inst.x = nextX;
-        inst.y = currentY;
-      } else {
-        inst.x = nextX;
-        inst.y = PLACEMENT_Y;
-      }
-      figma.currentPage.appendChild(inst);
+      group = figma.createFrame();
+      group.name = 'CourseGroup';
+      group.layoutMode = 'VERTICAL';
+      group.primaryAxisSizingMode = 'AUTO';
+      group.counterAxisSizingMode = 'AUTO';
+      group.itemSpacing = CLASS_GAP;
+      group.paddingTop = 0; group.paddingBottom = 0;
+      group.paddingLeft = 0; group.paddingRight = 0;
+      group.fills = [];
+      group.clipsContent = false;
+      group.setPluginData('notion_course_id', course.courseId);
+      group.x = hasWeekGroups ? nextX : nextX;
+      group.y = hasWeekGroups ? currentY : PLACEMENT_Y;
+      figma.currentPage.appendChild(group);
       created++;
     }
 
-    // 更新下一張卡的 X 及目前行高
-    if (hasWeekGroups) {
-      nextX += inst.width + CARD_GAP;
-      if (inst.height > rowHeight) rowHeight = inst.height;
-    } else if (!existing) {
-      nextX += inst.width + CARD_GAP;
+    // ── 找或建 CourseCard Instance（置於 group 第一個子節點）──
+    var courseInst = null;
+    for (var ci = 0; ci < group.children.length; ci++) {
+      var child = group.children[ci];
+      if (child.type === 'INSTANCE' && child.mainComponent && child.mainComponent.id === courseComp.id) {
+        courseInst = child; break;
+      }
+    }
+    if (!courseInst) {
+      courseInst = courseComp.createInstance();
+      group.insertChild(0, courseInst);
     }
 
-    // 圖層名 #X → boolean: show/hide；其餘: 填文字（TEXT 圖層）
+    // ── 填入課程卡欄位 ──────────────────────────────────────
     for (var li = 0; li < courseLayers.length; li++) {
       var layerName = courseLayers[li];
       var propName  = layerName.slice(1);
       var value     = course.props && course.props[propName] != null ? course.props[propName] : '';
       var boolVal   = toBooleanIfBool(value);
       if (boolVal !== null) {
-        // Boolean 欄位：直接 show/hide
-        setVisible(inst, layerName, boolVal);
+        setVisible(courseInst, layerName, boolVal);
       } else {
-        await setText(inst, layerName, value);
-        // 非 TEXT 圖層（Frame/Group）：有值則顯示，無值則隱藏
-        var txtNode = inst.findOne(function(n) { return n.name === layerName && n.type === 'TEXT'; });
-        if (!txtNode) setVisible(inst, layerName, !!value);
+        await setText(courseInst, layerName, value);
+        var txtNode = courseInst.findOne(function(n) { return n.name === layerName && n.type === 'TEXT'; });
+        if (!txtNode) setVisible(courseInst, layerName, !!value);
       }
     }
 
+    // ── 找或建 ClassList Frame ──────────────────────────────
+    var classList = null;
+    for (var gi = 0; gi < group.children.length; gi++) {
+      if (group.children[gi].name === 'ClassList') { classList = group.children[gi]; break; }
+    }
+    if (!classList) {
+      classList = figma.createFrame();
+      classList.name = 'ClassList';
+      classList.layoutMode = 'VERTICAL';
+      classList.primaryAxisSizingMode = 'AUTO';
+      classList.counterAxisSizingMode = 'AUTO';
+      classList.itemSpacing = 0;
+      classList.paddingTop = 0; classList.paddingBottom = 0;
+      classList.paddingLeft = 0; classList.paddingRight = 0;
+      classList.fills = [];
+      classList.clipsContent = false;
+      group.appendChild(classList);
+    }
+
+    // ── 同步 ClassCard instances 到 ClassList ───────────────
     if (course.classes && course.classes.length) {
-      await syncClassCards(inst, course.classes, classComp, classLayers);
+      await syncClassCards(classList, course.classes, classComp, classLayers);
+    }
+
+    // ── 更新行寬追蹤 ────────────────────────────────────────
+    if (hasWeekGroups) {
+      nextX += group.width + CARD_GAP;
+      if (group.height > rowHeight) rowHeight = group.height;
+    } else {
+      nextX += group.width + CARD_GAP;
     }
   }
 
@@ -273,57 +297,31 @@ async function handleSync(courses, config) {
 }
 
 // ================================================================
-// 班別子卡片同步（新增 / 更新 / 刪除）
+// 班別子卡片同步：ClassList 係普通 Frame，直接 appendChild，無需 detach
 // ================================================================
-async function syncClassCards(courseInst, classes, classComp, classLayers) {
-  const container = courseInst.findOne(function(n) { return n.name === 'ClassesContainer'; });
-  if (!container) {
-    console.warn('[syncClassCards] 課程組件缺少 ClassesContainer 節點');
-    return;
-  }
-  // workContainer 預設直接用 container；若 appendChild 失敗（instance 內部限制），才 detach
-  var workContainer = container;
-  var workInst = courseInst;
-
+async function syncClassCards(classList, classes, classComp, classLayers) {
+  // 建立現有 ClassCard 的 map（by notion_class_id）
   const existing = new Map();
-  for (const child of [...workContainer.children]) {
+  for (const child of [...classList.children]) {
     const id = child.getPluginData('notion_class_id');
     if (id) existing.set(id, child);
   }
 
+  // 移除已刪除的班別
   const currentIds = new Set(classes.map(function(c) { return c.classId; }));
   for (const [id, node] of existing) {
-    if (!currentIds.has(id)) {
-      node.remove();
-      existing.delete(id);
-    }
+    if (!currentIds.has(id)) { node.remove(); existing.delete(id); }
   }
 
+  // 新增或更新 ClassCard instances
   for (const cls of classes) {
-    let classInst = existing.get(cls.classId);
+    var classInst = existing.get(cls.classId);
     if (!classInst) {
       classInst = classComp.createInstance();
       classInst.setPluginData('notion_class_id', cls.classId);
-      try {
-        workContainer.appendChild(classInst);
-      } catch (e) {
-        // instance 內部不可直接 appendChild，先 detach courseInst
-        if (workInst.type === 'INSTANCE') {
-          console.warn('[syncClassCards] instance 限制，改為 detach：', e.message);
-          const savedId = workInst.getPluginData('notion_course_id'); // 先儲存，detach 後舊 ref 失效
-          const detached = workInst.detachInstance();
-          detached.setPluginData('notion_course_id', savedId);
-          workInst = detached;
-          workContainer = detached.findOne(function(n) { return n.name === 'ClassesContainer'; });
-          if (!workContainer) { console.warn('[syncClassCards] ClassesContainer 消失'); return; }
-          workContainer.appendChild(classInst);
-        } else {
-          console.warn('[syncClassCards] 無法 appendChild：', e.message);
-        }
-      }
+      classList.appendChild(classInst);
     }
 
-    // 圖層名 #X → boolean: show/hide；其餘: 填文字（TEXT 圖層）
     for (var li = 0; li < classLayers.length; li++) {
       var layerName = classLayers[li];
       var propName  = layerName.slice(1);
@@ -333,7 +331,6 @@ async function syncClassCards(courseInst, classes, classComp, classLayers) {
         setVisible(classInst, layerName, boolVal);
       } else {
         await setText(classInst, layerName, value);
-        // 非 TEXT 圖層（Frame/Group）：有值則顯示，無值則隱藏
         var txtNode = classInst.findOne(function(n) { return n.name === layerName && n.type === 'TEXT'; });
         if (!txtNode) setVisible(classInst, layerName, !!value);
       }
